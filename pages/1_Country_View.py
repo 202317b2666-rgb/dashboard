@@ -1,120 +1,58 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import plotly.graph_objects as go
 
-# -----------------------------
-# Page Setup
-# -----------------------------
-st.set_page_config(page_title="Country Dashboard", layout="wide")
-st.title("📊 Country Insights Explorer")
+# Load cleaned dataset
+df = pd.read_csv("HEX.csv")
 
-# -----------------------------
-# Load Data
-# -----------------------------
-df = pd.read_csv("final_with_socio_cleaned.csv")
+# --- Sidebar ---
+st.sidebar.title("Country View Dashboard")
+country = st.sidebar.selectbox("Select a Country", sorted(df["Country"].unique()))
 
-# -----------------------------
-# Rename columns for UI clarity
-# -----------------------------
-df = df.rename(columns={
-    "Country": "Country",
-    "ISO3": "ISO3",
-    "Year": "Year",
-    "GDP_per_capita": "GDP per Capita (USD)",
-    "Gini_Index": "Gini Index",
-    "Life_Expectancy": "Life Expectancy",
-    "PM25": "PM2.5 (µg/m³)",
-    "Health_Insurance": "Health Insurance (%)",
-    "Median_Age_Est": "Median Age (Estimates)",
-    "Median_Age_Mid": "Median Age (Medium)",
-    "COVID_Deaths": "COVID Deaths",
-    "COVID_Cases": "COVID Cases",
-    "Population_Density": "Population Density",
-    "Total_Population": "Total Population",
-    "Male_Population": "Male Population",
-    "Female_Population": "Female Population",
-    "Births": "Births",
-    "Deaths": "Deaths",
-    "HDI": "HDI"
-})
+country_df = df[df["Country"] == country]
 
-# Remove duplicates
-df = df.drop_duplicates(subset=["Country", "Year"])
+st.title(f"📊 {country} - Socio-Economic & Health Overview")
 
-# -----------------------------
-# Filters
-# -----------------------------
-countries = sorted(df["Country"].unique())
-years = sorted(df["Year"].unique())
+# --- Line Chart Theme (Share Market Style) ---
+def line_chart_dark(x, y, title, color):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=x, y=y, mode="lines", line=dict(width=2, color=color)))
+    fig.update_layout(
+        title=title,
+        plot_bgcolor="black",
+        paper_bgcolor="black",
+        font=dict(color="white"),
+        xaxis=dict(showgrid=False, color="white"),
+        yaxis=dict(showgrid=False, color="white"),
+    )
+    return fig
 
-selected_country = st.selectbox("🌍 Select Country", countries)
-selected_year = st.slider("📅 Select Year", int(min(years)), int(max(years)), int(max(years)))
+# Chart 1: GDP per capita
+gdp_fig = line_chart_dark(country_df["Year"], country_df["GDP_per_capita"], "GDP per Capita", "cyan")
+st.plotly_chart(gdp_fig, use_container_width=True)
 
-# Filter selected row
-row = df[(df["Country"] == selected_country) & (df["Year"] == selected_year)]
+# Chart 2: Life Expectancy
+life_fig = line_chart_dark(country_df["Year"], country_df["Life_Expectancy"], "Life Expectancy", "red")
+st.plotly_chart(life_fig, use_container_width=True)
 
-if row.empty:
-    st.warning("⚠ No data available for this year.")
-    st.stop()
+# Chart 3: HDI
+hdi_fig = line_chart_dark(country_df["Year"], country_df["HDI"], "Human Development Index", "yellow")
+st.plotly_chart(hdi_fig, use_container_width=True)
 
-row = row.iloc[0]
+# --- Combined Multi-Line Chart ---
+fig_multi = go.Figure()
 
-st.markdown(f"### 📍 {selected_country} — {selected_year}")
+fig_multi.add_trace(go.Scatter(x=country_df["Year"], y=country_df["GDP_per_capita"], mode="lines", name="GDP", line=dict(width=2)))
+fig_multi.add_trace(go.Scatter(x=country_df["Year"], y=country_df["Life_Expectancy"], mode="lines", name="Life Expectancy", line=dict(width=2)))
+fig_multi.add_trace(go.Scatter(x=country_df["Year"], y=country_df["HDI"], mode="lines", name="HDI", line=dict(width=2)))
 
-# -----------------------------
-# Metric Cards
-# -----------------------------
-st.subheader("📌 Key Indicators")
+fig_multi.update_layout(
+    title="Combined Multi-Line Trends",
+    plot_bgcolor="black",
+    paper_bgcolor="black",
+    font=dict(color="white"),
+    xaxis=dict(showgrid=False, color="white"),
+    yaxis=dict(showgrid=False, color="white"),
+)
 
-metric_cols = st.columns(4)
-
-metrics_to_show = [
-    ("GDP per Capita (USD)", "💵"),
-    ("Life Expectancy", "👶"),
-    ("Median Age (Medium)", "📈"),
-    ("Population Density", "🌍"),
-    ("PM2.5 (µg/m³)", "🌫️"),
-    ("Health Insurance (%)", "🏥"),
-    ("HDI", "📘"),
-    ("Gini Index", "📊"),
-    ("COVID Deaths", "☠️"),
-    ("COVID Cases", "🦠"),
-]
-
-for i, (metric, icon) in enumerate(metrics_to_show):
-    value = row.get(metric, None)
-    value = value if pd.notna(value) else "No Data"
-
-    with metric_cols[i % 4]:
-        st.metric(f"{icon} {metric}", value)
-
-# -----------------------------
-# Trends
-# -----------------------------
-st.subheader("📈 Historical Trends")
-country_data = df[df["Country"] == selected_country]
-
-def plot_trend(y_col, title):
-    if y_col in country_data.columns:
-        fig = px.line(country_data, x="Year", y=y_col, title=title, markers=True)
-        st.plotly_chart(fig, use_container_width=True)
-
-trend_cols = st.columns(2)
-
-with trend_cols[0]:
-    plot_trend("GDP per Capita (USD)", "GDP per Capita Over Years")
-
-with trend_cols[1]:
-    plot_trend("Life Expectancy", "Life Expectancy Over Time")
-
-with trend_cols[0]:
-    plot_trend("PM2.5 (µg/m³)", "PM2.5 Pollution Trend")
-
-with trend_cols[1]:
-    plot_trend("HDI", "HDI Trend Over Time")
-
-# -----------------------------
-# Raw Data
-# -----------------------------
-st.markdown("### 🔍 Full Data for Selected Year")
-st.dataframe(pd.DataFrame([row]))
+st.plotly_chart(fig_multi, use_container_width=True)
