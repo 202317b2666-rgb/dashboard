@@ -9,12 +9,22 @@ df = pd.read_csv("final_with_socio_cleaned.csv")
 st.sidebar.title("Country View Dashboard")
 country = st.sidebar.selectbox("Select a Country", sorted(df["Country"].unique()))
 
+# Filter by country
 country_df = df[df["Country"] == country].sort_values("Year")
 
-st.title(f"📊 {country} - Socio-Economic & Health Overview")
+# --- YEAR SLIDER ---
+years = sorted(country_df["Year"].unique())
+selected_year = st.sidebar.slider(
+    "Select Year",
+    min_value=int(min(years)),
+    max_value=int(max(years)),
+    value=int(max(years)),
+)
 
-# Pick the latest year for KPIs
-latest = country_df.iloc[-1]
+st.title(f"📊 {country} - Socio-Economic & Health Overview ({selected_year})")
+
+# Data for the selected year
+year_row = country_df[country_df["Year"] == selected_year].iloc[0]
 
 # --- KPI Cards ---
 st.subheader("📌 Key Indicators")
@@ -22,13 +32,13 @@ st.subheader("📌 Key Indicators")
 col1, col2, col3 = st.columns(3)
 col4, col5, col6 = st.columns(3)
 
-col1.metric("GDP per Capita (USD)", f"{latest['GDP_per_capita']:.2f}" if pd.notna(latest['GDP_per_capita']) else "NA")
-col2.metric("Life Expectancy", f"{latest['Life_Expectancy']:.2f}" if pd.notna(latest['Life_Expectancy']) else "NA")
-col3.metric("HDI", f"{latest['HDI']:.3f}" if pd.notna(latest['HDI']) else "NA")
+col1.metric("GDP per Capita (USD)", f"{year_row['GDP_per_capita']:.2f}" if pd.notna(year_row['GDP_per_capita']) else "NA")
+col2.metric("Life Expectancy", f"{year_row['Life_Expectancy']:.2f}" if pd.notna(year_row['Life_Expectancy']) else "NA")
+col3.metric("HDI", f"{year_row['HDI']:.3f}" if pd.notna(year_row['HDI']) else "NA")
 
-col4.metric("Population Density", f"{latest['Population_Density']:.2f}" if pd.notna(latest['Population_Density']) else "NA")
-col5.metric("Births", f"{latest['Births']:.2f}" if pd.notna(latest['Births']) else "NA")
-col6.metric("Deaths", f"{latest['Deaths']:.2f}" if pd.notna(latest['Deaths']) else "NA")
+col4.metric("Population Density", f"{year_row['Population_Density']:.2f}" if pd.notna(year_row['Population_Density']) else "NA")
+col5.metric("Births", f"{year_row['Births']:.2f}" if pd.notna(year_row['Births']) else "NA")
+col6.metric("Deaths", f"{year_row['Deaths']:.2f}" if pd.notna(year_row['Deaths']) else "NA")
 
 # --- Line Chart Theme (Share Market Style) ---
 def line_chart_dark(x, y, title, color):
