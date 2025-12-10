@@ -3,34 +3,18 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 
-# -----------------------------
+# ---------------------------------------------------
 # Page Setup
-# -----------------------------
+# ---------------------------------------------------
 st.set_page_config(page_title="Country Dashboard", layout="wide")
 st.title("📊 Country Insights Explorer")
 
-# -----------------------------
+# ---------------------------------------------------
 # Load Data
-# -----------------------------
+# ---------------------------------------------------
 df = pd.read_csv("final_with_socio_cleaned.csv")
 
-# Strip spaces from column names
-df.columns = df.columns.str.strip()
-
-# -----------------------------
-# Theme Toggle (Dark/Light)
-# -----------------------------
-mode = st.radio("🌗 Select Theme:", ["Light Mode", "Dark Mode"])
-if mode == "Dark Mode":
-    bg_color = "black"
-    font_color = "white"
-else:
-    bg_color = "white"
-    font_color = "black"
-
-# -----------------------------
-# Rename columns for UI clarity
-# -----------------------------
+# Rename columns (UI friendly)
 df = df.rename(columns={
     "Country": "Country",
     "ISO3": "ISO3",
@@ -53,37 +37,39 @@ df = df.rename(columns={
     "HDI": "HDI"
 })
 
-# Remove duplicates
 df = df.drop_duplicates(subset=["Country", "Year"])
 
-# -----------------------------
+# ---------------------------------------------------
 # Filters
-# -----------------------------
+# ---------------------------------------------------
 countries = sorted(df["Country"].unique())
 years = sorted(df["Year"].unique())
 
 selected_country = st.selectbox("🌍 Select Country", countries)
 selected_year = st.slider("📅 Select Year", int(min(years)), int(max(years)), int(max(years)))
 
-# Filter selected row
+# Filter the row
 row = df[(df["Country"] == selected_country) & (df["Year"] == selected_year)]
-
 if row.empty:
-    st.warning("⚠ No data available for this year.")
+    st.warning("⚠ No data for this year.")
     st.stop()
 
 row = row.iloc[0]
+country_data = df[df["Country"] == selected_country]
 
+# ---------------------------------------------------
+# PAGE TITLE
+# ---------------------------------------------------
 st.markdown(f"### 📍 {selected_country} — {selected_year}")
 
-# -----------------------------
+# ---------------------------------------------------
 # Metric Cards
-# -----------------------------
+# ---------------------------------------------------
 st.subheader("📌 Key Indicators")
 
 metric_cols = st.columns(4)
 
-metrics_to_show = [
+metrics = [
     ("GDP per Capita (USD)", "💵"),
     ("Life Expectancy", "👶"),
     ("Median Age (Medium)", "📈"),
@@ -92,92 +78,99 @@ metrics_to_show = [
     ("Health Insurance (%)", "🏥"),
     ("HDI", "📘"),
     ("Gini Index", "📊"),
-    ("COVID Deaths", "☠️"),
-    ("COVID Cases", "🦠"),
 ]
 
-for i, (metric, icon) in enumerate(metrics_to_show):
-    value = row.get(metric, None)
-    value = value if pd.notna(value) else "No Data"
+for i, (m, icon) in enumerate(metrics):
+    val = row.get(m, "NA")
+    val = "No Data" if pd.isna(val) else round(val, 3)
     with metric_cols[i % 4]:
-        st.metric(f"{icon} {metric}", value)
+        st.metric(f"{icon} {m}", val)
 
-# -----------------------------
-# Line Chart (Stock Market Style)
-# -----------------------------
-st.subheader("📈 Historical Trends (Stock Market Style)")
-
-def stock_style_line(x, y, title, color):
+# ---------------------------------------------------
+# Premium Stock-Market Style Line Chart
+# ---------------------------------------------------
+def stock_line_chart(df, y, title):
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=x, y=y, mode="lines+markers", line=dict(color=color, width=2)))
+
+    # Glow line
+    fig.add_trace(go.Scatter(
+        x=df["Year"],
+        y=df[y],
+        mode="lines",
+        line=dict(width=10, color="rgba(0, 255, 255, 0.2)"),
+        hoverinfo="skip",
+        showlegend=False
+    ))
+
+    # Neon line
+    fig.add_trace(go.Scatter(
+        x=df["Year"],
+        y=df[y],
+        mode="lines",
+        line=dict(width=3, color="#00FFFF"),
+        hovertemplate="<b>Year %{x}</b><br>%{y}<extra></extra>",
+        name=title
+    ))
+
     fig.update_layout(
-        title=dict(text=title, font=dict(color=font_color)),
-        plot_bgcolor=bg_color,
-        paper_bgcolor=bg_color,
-        font=dict(color=font_color),
-        xaxis=dict(showgrid=False, color=font_color),
-        yaxis=dict(showgrid=False, color=font_color),
+        template="plotly_dark",
+        title=title,
+        height=420,
+        plot_bgcolor="black",
+        paper_bgcolor="black",
+        xaxis=dict(showgrid=False, color="white"),
+        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.08)", color="white"),
+        margin=dict(l=20, r=20, t=50, b=20),
     )
+
     return fig
 
-country_data = df[df["Country"] == selected_country]
+# ---------------------------------------------------
+# Trend Charts (Stock style)
+# ---------------------------------------------------
+st.subheader("📈 Historical Trends (Stock Style)")
 
-line_charts = [
-    ("GDP per Capita (USD)", "cyan"),
-    ("Life Expectancy", "red"),
-    ("HDI", "yellow"),
-]
+trend_cols = st.columns(2)
 
-line_cols = st.columns(2)
-for i, (col_name, color) in enumerate(line_charts):
-    fig = stock_style_line(country_data["Year"], country_data[col_name], col_name, color)
-    with line_cols[i % 2]:
-        st.plotly_chart(fig, use_container_width=True)
+with trend_cols[0]:
+    st.plotly_chart(stock_line_chart(country_data, "GDP per Capita (USD)", "💵 GDP Trend"), use_container_width=True)
 
-# Multi-Line Chart
-fig_multi = go.Figure()
-for col_name, color in line_charts:
-    fig_multi.add_trace(go.Scatter(x=country_data["Year"], y=country_data[col_name], mode="lines", name=col_name, line=dict(color=color, width=2)))
+with trend_cols[1]:
+    st.plotly_chart(stock_line_chart(country_data, "Life Expectancy", "👶 Life Expectancy Trend"), use_container_width=True)
 
-fig_multi.update_layout(
-    title=dict(text="Combined Multi-Line Trends", font=dict(color=font_color)),
-    plot_bgcolor=bg_color,
-    paper_bgcolor=bg_color,
-    font=dict(color=font_color),
-    xaxis=dict(showgrid=False, color=font_color),
-    yaxis=dict(showgrid=False, color=font_color),
+with trend_cols[0]:
+    st.plotly_chart(stock_line_chart(country_data, "PM2.5 (µg/m³)", "🌫️ PM2.5 Pollution Trend"), use_container_width=True)
+
+with trend_cols[1]:
+    st.plotly_chart(stock_line_chart(country_data, "HDI", "📘 HDI Trend Over Time"), use_container_width=True)
+
+# ---------------------------------------------------
+# Bar Charts
+# ---------------------------------------------------
+st.subheader("📊 Additional Visual Insights")
+
+bar1 = px.bar(
+    country_data,
+    x="Year",
+    y="COVID Cases",
+    title="🦠 COVID Cases Over Years",
+    template="plotly_dark",
 )
+bar1.update_layout(height=400)
+st.plotly_chart(bar1, use_container_width=True)
 
-st.plotly_chart(fig_multi, use_container_width=True)
+bar2 = px.bar(
+    country_data,
+    x="Year",
+    y="Births",
+    title="👶 Births Trend Over Years",
+    template="plotly_dark",
+)
+bar2.update_layout(height=400)
+st.plotly_chart(bar2, use_container_width=True)
 
-# -----------------------------
-# COVID Chart (from first available year)
-# -----------------------------
-st.subheader("🦠 COVID Trends")
-
-# Use exact column names from cleaned CSV
-covid_cols = ["COVID Deaths", "COVID Cases"]
-if all(col in country_data.columns for col in covid_cols):
-    covid_data = country_data.dropna(subset=covid_cols)
-    if not covid_data.empty:
-        covid_data = covid_data[covid_data["Year"] >= 2020]  # show only from 2020
-        fig_covid = px.bar(
-            covid_data,
-            x="Year",
-            y=covid_cols,
-            barmode="group",
-            text_auto=True,
-            title="COVID Deaths & Cases"
-        )
-        fig_covid.update_layout(
-            plot_bgcolor=bg_color,
-            paper_bgcolor=bg_color,
-            font=dict(color=font_color)
-        )
-        st.plotly_chart(fig_covid, use_container_width=True)
-
-# -----------------------------
+# ---------------------------------------------------
 # Raw Data
-# -----------------------------
-st.subheader("🔍 Full Data for Selected Year")
+# ---------------------------------------------------
+st.markdown("### 🔍 Full Data for Selected Year")
 st.dataframe(pd.DataFrame([row]))
