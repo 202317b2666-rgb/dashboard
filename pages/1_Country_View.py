@@ -13,41 +13,53 @@ st.title("📊 Country Insights Explorer")
 # -----------------------------
 df = pd.read_csv("final_with_socio_cleaned.csv")
 
-# Drop duplicates if any
-df = df.drop_duplicates(subset=["Entity", "Year"])
-
+# -----------------------------
 # Rename columns for UI clarity
+# -----------------------------
 df = df.rename(columns={
-    "Entity": "Country",
+    "Country": "Country",
+    "ISO3": "ISO3",
+    "Year": "Year",
     "GDP_per_capita": "GDP per Capita (USD)",
-    "Period life expectancy at birth": "Life Expectancy",
-    "Population density": "Population Density",
-    "Concentrations of fine particulate matter (PM2.5) - Residence area type: Total": "PM2.5",
-    "Share of population covered by health insurance (ILO (2014))": "Health Insurance (%)",
-    "Median age - Sex: all - Age: all - Variant: medium": "Median Age",
-    "Total_COVID_Deaths": "COVID Deaths",
-    "Total_COVID_Cases": "COVID Cases"
+    "Gini_Index": "Gini Index",
+    "Life_Expectancy": "Life Expectancy",
+    "PM25": "PM2.5 (µg/m³)",
+    "Health_Insurance": "Health Insurance (%)",
+    "Median_Age_Est": "Median Age (Estimates)",
+    "Median_Age_Mid": "Median Age (Medium)",
+    "COVID_Deaths": "COVID Deaths",
+    "COVID_Cases": "COVID Cases",
+    "Population_Density": "Population Density",
+    "Total_Population": "Total Population",
+    "Male_Population": "Male Population",
+    "Female_Population": "Female Population",
+    "Births": "Births",
+    "Deaths": "Deaths",
+    "HDI": "HDI"
 })
 
-# -----------------------------
-# Sidebar Filters
-# -----------------------------
-country_list = sorted(df["Country"].unique())
-year_list = sorted(df["Year"].unique())
+# Remove duplicates
+df = df.drop_duplicates(subset=["Country", "Year"])
 
-selected_country = st.selectbox("🌍 Select Country", country_list)
-selected_year = st.slider("📅 Select Year", min(year_list), max(year_list), max(year_list))
+# -----------------------------
+# Filters
+# -----------------------------
+countries = sorted(df["Country"].unique())
+years = sorted(df["Year"].unique())
 
-# Filter for selected country & year
+selected_country = st.selectbox("🌍 Select Country", countries)
+selected_year = st.slider("📅 Select Year", int(min(years)), int(max(years)), int(max(years)))
+
+# Filter selected row
 row = df[(df["Country"] == selected_country) & (df["Year"] == selected_year)]
 
-st.markdown(f"### 📍 {selected_country} — {selected_year}")
-
 if row.empty:
-    st.warning("⚠ No data available for selected year.")
+    st.warning("⚠ No data available for this year.")
     st.stop()
 
-data = row.iloc[0]
+row = row.iloc[0]
+
+st.markdown(f"### 📍 {selected_country} — {selected_year}")
 
 # -----------------------------
 # Metric Cards
@@ -56,55 +68,53 @@ st.subheader("📌 Key Indicators")
 
 metric_cols = st.columns(4)
 
-metrics_to_show = {
-    "GDP per Capita (USD)": "💵",
-    "Life Expectancy": "👶",
-    "Median Age": "📈",
-    "Population Density": "🌏",
-    "PM2.5": "🌫️",
-    "Health Insurance (%)": "🏥",
-    "HDI": "📘",
-    "COVID Deaths": "☠️"
-}
+metrics_to_show = [
+    ("GDP per Capita (USD)", "💵"),
+    ("Life Expectancy", "👶"),
+    ("Median Age (Medium)", "📈"),
+    ("Population Density", "🌍"),
+    ("PM2.5 (µg/m³)", "🌫️"),
+    ("Health Insurance (%)", "🏥"),
+    ("HDI", "📘"),
+    ("Gini Index", "📊"),
+    ("COVID Deaths", "☠️"),
+    ("COVID Cases", "🦠"),
+]
 
-index = 0
-for label, icon in metrics_to_show.items():
-    with metric_cols[index % 4]:
-        value = data[label] if pd.notna(data[label]) else "No data"
-        st.metric(f"{icon} {label}", value)
-    index += 1
+for i, (metric, icon) in enumerate(metrics_to_show):
+    value = row.get(metric, None)
+    value = value if pd.notna(value) else "No Data"
+
+    with metric_cols[i % 4]:
+        st.metric(f"{icon} {metric}", value)
 
 # -----------------------------
-# Trend Charts
+# Trends
 # -----------------------------
 st.subheader("📈 Historical Trends")
-
 country_data = df[df["Country"] == selected_country]
 
-chart_cols = st.columns(2)
+def plot_trend(y_col, title):
+    if y_col in country_data.columns:
+        fig = px.line(country_data, x="Year", y=y_col, title=title, markers=True)
+        st.plotly_chart(fig, use_container_width=True)
 
-# Chart 1 — GDP Trend
-with chart_cols[0]:
-    fig = px.line(country_data, x="Year", y="GDP per Capita (USD)", title="GDP per Capita Over Time")
-    st.plotly_chart(fig, use_container_width=True)
+trend_cols = st.columns(2)
 
-# Chart 2 — Life Expectancy Trend
-with chart_cols[1]:
-    fig = px.line(country_data, x="Year", y="Life Expectancy", title="Life Expectancy Over Time")
-    st.plotly_chart(fig, use_container_width=True)
+with trend_cols[0]:
+    plot_trend("GDP per Capita (USD)", "GDP per Capita Over Years")
 
-# Chart 3 — PM2.5 Trend
-with chart_cols[0]:
-    fig = px.line(country_data, x="Year", y="PM2.5", title="PM2.5 Pollution Trend")
-    st.plotly_chart(fig, use_container_width=True)
+with trend_cols[1]:
+    plot_trend("Life Expectancy", "Life Expectancy Over Time")
 
-# Chart 4 — HDI Trend
-with chart_cols[1]:
-    fig = px.line(country_data, x="Year", y="HDI", title="HDI Trend")
-    st.plotly_chart(fig, use_container_width=True)
+with trend_cols[0]:
+    plot_trend("PM2.5 (µg/m³)", "PM2.5 Pollution Trend")
+
+with trend_cols[1]:
+    plot_trend("HDI", "HDI Trend Over Time")
 
 # -----------------------------
 # Raw Data
 # -----------------------------
-st.markdown("### 🔍 Detailed Data")
-st.dataframe(row)
+st.markdown("### 🔍 Full Data for Selected Year")
+st.dataframe(pd.DataFrame([row]))
