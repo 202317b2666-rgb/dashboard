@@ -1,0 +1,5 @@
+Country,Year,GDP,HDI,LifeExpectancy,MedianAge,PopulationDensity,PM25,GovernmentEffectiveness,COVIDDeathsPerMillion
+India,2020,2100,0.65,69.5,28.0,420,41.5,-0.18,315
+USA,2020,63000,0.92,78.9,38.0,36,12.0,1.25,320
+India,2021,2200,0.66,70.0,28.5,425,40.0,-0.17,310
+USA,2021,65000,0.93,79.0,38.5,36,11.5,1.30,330
