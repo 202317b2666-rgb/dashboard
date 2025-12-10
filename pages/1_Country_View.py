@@ -2,23 +2,22 @@ import streamlit as st
 import pandas as pd
 
 st.set_page_config(page_title="Country Wise Dashboard", layout="wide")
-
 st.title("📊 Country Wise Insights Dashboard")
 
-# Load HEX dataset
-hex_df = pd.read_csv("HEX.csv")
+# Load the metrics CSV (for country view)
+metrics_df = pd.read_csv("country_metrics.csv")
 
 # Check required columns
 required_cols = ["Country", "Year"]
-missing = [c for c in required_cols if c not in hex_df.columns]
+missing = [c for c in required_cols if c not in metrics_df.columns]
 if missing:
-    st.error(f"Missing columns in HEX.csv: {missing}")
+    st.error(f"Missing columns in country_metrics.csv: {missing}")
     st.stop()
 
 # -------------------------
 # Year slider
 # -------------------------
-years = sorted(hex_df["Year"].unique())
+years = sorted(metrics_df["Year"].unique())
 selected_year = st.slider(
     "Select Year",
     min_value=int(min(years)),
@@ -29,15 +28,15 @@ selected_year = st.slider(
 # -------------------------
 # Country dropdown
 # -------------------------
-countries = sorted(hex_df["Country"].unique())
+countries = sorted(metrics_df["Country"].unique())
 selected_country = st.selectbox("Select Country", countries)
 
 # -------------------------
 # Filter data
 # -------------------------
-filtered = hex_df[
-    (hex_df["Country"] == selected_country) &
-    (hex_df["Year"] == selected_year)
+filtered = metrics_df[
+    (metrics_df["Country"] == selected_country) &
+    (metrics_df["Year"] == selected_year)
 ]
 
 st.subheader(f"📍 Country: {selected_country}")
@@ -49,28 +48,20 @@ else:
     st.success("Data loaded successfully!")
 
 # -------------------------
-# Dummy metrics (replace later)
+# Display metrics
 # -------------------------
-st.markdown("### 📌 Key Indicators (Prototype Values)")
-
-dummy_metrics = {
-    "GDP per capita": "₹ 75,000",
-    "HDI": 0.71,
-    "Life Expectancy": "70.5 yrs",
-    "Median Age": "28.2 yrs",
-    "Population Density": "432 / km²",
-    "PM2.5 Pollution": 41.5,
-    "Govt Effectiveness": -0.18,
-    "COVID Deaths / million": 315,
-}
-
+st.markdown("### 📌 Key Indicators")
 cols = st.columns(2)
-for i, (name, value) in enumerate(dummy_metrics.items()):
+metric_list = ["GDP", "HDI", "LifeExpectancy", "MedianAge",
+               "PopulationDensity", "PM25", "GovernmentEffectiveness", "COVIDDeathsPerMillion"]
+
+for i, metric in enumerate(metric_list):
     with cols[i % 2]:
-        st.metric(label=name, value=value)
+        value = filtered.iloc[0][metric]
+        st.metric(label=metric, value=value)
 
 # -------------------------
-# Raw HEX data
+# Raw data
 # -------------------------
-st.markdown("### 🔍 Raw HEX Data")
+st.markdown("### 🔍 Raw Country Data")
 st.dataframe(filtered)
