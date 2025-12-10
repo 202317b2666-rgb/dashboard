@@ -147,27 +147,37 @@ with trend_cols[1]:
 # ---------------------------------------------------
 # Bar Charts
 # ---------------------------------------------------
-st.subheader("📊 Additional Visual Insights")
+# -----------------------------
+# BAR CHARTS WITH SAME THEME
+# -----------------------------
+st.subheader("📦 Important Bar Charts")
 
-bar1 = px.bar(
-    country_data,
-    x="Year",
-    y="COVID Cases",
-    title="🦠 COVID Cases Over Years",
-    template="plotly_dark",
-)
-bar1.update_layout(height=400)
-st.plotly_chart(bar1, use_container_width=True)
+b1, b2 = st.columns(2)
 
-bar2 = px.bar(
-    country_data,
-    x="Year",
-    y="Births",
-    title="👶 Births Trend Over Years",
-    template="plotly_dark",
-)
-bar2.update_layout(height=400)
-st.plotly_chart(bar2, use_container_width=True)
+def themed_bar(df, y, title):
+    fig = px.bar(
+        df,
+        x="Year",
+        y=y,
+        color=y,
+        template="plotly_dark",
+        title=title
+    )
+    fig.update_layout(height=400)
+    return fig
+
+with b1:
+    st.plotly_chart(themed_bar(country_data, "Total Population", "📌 Total Population Over Time"), use_container_width=True)
+
+with b2:
+    st.plotly_chart(themed_bar(country_data, "COVID Cases", "🦠 COVID Cases Over Time"), use_container_width=True)
+
+with b1:
+    st.plotly_chart(themed_bar(country_data, "Births", "👶 Births Over Time"), use_container_width=True)
+
+with b2:
+    st.plotly_chart(themed_bar(country_data, "Deaths", "⚰️ Deaths Over Time"), use_container_width=True)
+
 
 # ---------------------------------------------------
 # Raw Data
