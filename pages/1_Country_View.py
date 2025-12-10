@@ -3,7 +3,9 @@ import pandas as pd
 import plotly.graph_objects as go
 
 # Load cleaned dataset
-df = pd.read_csv("HEX.csv")
+df = pd.read_csv("final_with_socio_cleaned.csv")
+
+st.write("Loaded Columns:", df.columns.tolist())  # Debug line (optional)
 
 # --- Sidebar ---
 st.sidebar.title("Country View Dashboard")
