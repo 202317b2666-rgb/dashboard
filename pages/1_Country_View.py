@@ -12,7 +12,7 @@ st.title("📊 Country Insights Explorer")
 # ---------------------------------------------------
 # Load Data
 # ---------------------------------------------------
-df = pd.read_csv("final_with_socio_cleaned.csv")
+df = pd.read_csv("final_dashboard_data.csv")
 
 # Rename columns (UI friendly)
 df = df.rename(columns={
