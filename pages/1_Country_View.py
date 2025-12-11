@@ -70,27 +70,49 @@ st.markdown(f"### 📍 {selected_country} — {selected_year}")
 # ---------------------------------------------------
 # Metric Cards
 # ---------------------------------------------------
-st.subheader("📌 Key Indicators")
-st.write("")  # GAP 3
+# ---------------------------------------------------
+# FULL KEY INDICATORS (16 cards)
+# ---------------------------------------------------
+
+st.subheader("📌 Key Indicators (Complete Overview)")
 
 metric_cols = st.columns(4)
 
-metrics = [
+full_metrics = [
+    # ----- Economy & Inequality -----
     ("GDP per Capita (USD)", "💵"),
-    ("Life Expectancy", "👶"),
-    ("Median Age (Medium)", "📈"),
-    ("Population Density", "🌍"),
-    ("PM2.5 (µg/m³)", "🌫️"),
-    ("Health Insurance (%)", "🏥"),
-    ("HDI", "📘"),
     ("Gini Index", "📊"),
+    ("HDI", "📘"),
+
+    # ----- Health & Environment -----
+    ("Life Expectancy", "👶"),
+    ("Health Insurance (%)", "🏥"),
+    ("PM2.5 (µg/m³)"),
+
+    # ----- Demographics -----
+    ("Total Population", "👥"),
+    ("Male Population", "👨"),
+    ("Female Population", "👩"),
+    ("Median Age (Medium)", "📈"),
+    ("Median Age (Estimates)", "📉"),
+    ("Population Density", "🌍"),
+
+    # ----- Vital Statistics -----
+    ("Births"),
+    ("Deaths"),
+
+    # ----- COVID -----
+    ("COVID Cases", "🦠"),
+    ("COVID Deaths", "☠️"),
 ]
 
-for i, (m, icon) in enumerate(metrics):
-    val = row.get(m, "NA")
+for i, (metric, icon) in enumerate(full_metrics):
+    val = row.get(metric, "NA")
     val = "No Data" if pd.isna(val) else round(val, 3)
+
     with metric_cols[i % 4]:
-        st.metric(f"{icon} {m}", val)
+        st.metric(f"{icon} {metric}", val)
+
 
 # ---------------------------------------------------
 # Stock-style Line Chart (Neon)
@@ -131,7 +153,7 @@ line_colors = [
 # ---------------------------------------------------
 # Trend Charts
 # ---------------------------------------------------
-st.subheader("📈 Historical Trends (Stock Style)")
+st.subheader(" Historical Trends ")
 
 trend_cols = st.columns(2)
 
@@ -142,10 +164,10 @@ with trend_cols[1]:
     st.plotly_chart(stock_line_chart(country_data, "Life Expectancy", "👶 Life Expectancy Trend", line_colors[1]), use_container_width=True)
 
 with trend_cols[0]:
-    st.plotly_chart(stock_line_chart(country_data, "PM2.5 (µg/m³)", "🌫️ PM2.5 Pollution Trend", line_colors[2]), use_container_width=True)
+    st.plotly_chart(stock_line_chart(country_data, "PM2.5 (µg/m³)", "PM2.5 Pollution Trend", line_colors[2]), use_container_width=True)
 
 with trend_cols[1]:
-    st.plotly_chart(stock_line_chart(country_data, "HDI", "📘 HDI Trend", line_colors[3]), use_container_width=True)
+    st.plotly_chart(stock_line_chart(country_data, "HDI", "HDI Trend", line_colors[3]), use_container_width=True)
 
 # ---------------------------------------------------
 # Gradient Bar Charts
@@ -156,12 +178,12 @@ with trend_cols[1]:
 st.subheader("📊 Additional Visual Insights")
 
 bar_charts = [
-    ("COVID Cases", "🦠 COVID Cases Over Years", "Viridis"),
-    ("Births", "👶 Births Over Years", "Plasma"),
-    ("GDP per Capita (USD)", "💵 GDP per Capita Over Years", "Cividis"),
-    ("Gini Index", "📊 Gini Index Over Years", "Turbo"),
-    ("Health Insurance (%)", "🏥 Health Insurance Coverage", "Magma"),
-    ("PM2.5 (µg/m³)", "🌫️ PM2.5 Air Pollution Over Years", "Inferno"),
+    ("COVID Cases", " COVID Cases Over Years", "Viridis"),
+    ("Births", " Births Over Years", "Plasma"),
+    ("GDP per Capita (USD)", " GDP per Capita Over Years", "Cividis"),
+    ("Gini Index", " Gini Index Over Years", "Turbo"),
+    ("Health Insurance (%)", "Health Insurance Coverage", "Magma"),
+    ("PM2.5 (µg/m³)", " PM2.5 Air Pollution Over Years", "Inferno"),
 ]
 
 for metric, title, gradient in bar_charts:
@@ -186,7 +208,7 @@ if not covid_data.empty:
         covid_data,
         x="Year",
         y="COVID Cases",
-        title="🦠 COVID Cases (2020 Onwards)",
+        title=" COVID Cases (2020 Onwards)",
         template="plotly_dark",
         color="COVID Cases",
         color_continuous_scale="Viridis"
