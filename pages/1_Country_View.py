@@ -150,30 +150,33 @@ with trend_cols[1]:
 # ---------------------------------------------------
 # Gradient Bar Charts
 # ---------------------------------------------------
+# ---------------------------------------------------
+# Gradient Bar Charts (Expanded)
+# ---------------------------------------------------
 st.subheader("📊 Additional Visual Insights")
 
-bar1 = px.bar(
-    country_data,
-    x="Year",
-    y="COVID Cases",
-    title="🦠 COVID Cases Over Years",
-    template="plotly_dark",
-    color="COVID Cases",
-    color_continuous_scale="Viridis"
-)
-st.plotly_chart(bar1, use_container_width=True)
+bar_charts = [
+    ("COVID Cases", "🦠 COVID Cases Over Years", "Viridis"),
+    ("Births", "👶 Births Over Years", "Plasma"),
+    ("GDP per Capita (USD)", "💵 GDP per Capita Over Years", "Cividis"),
+    ("Gini Index", "📊 Gini Index Over Years", "Turbo"),
+    ("Health Insurance (%)", "🏥 Health Insurance Coverage", "Magma"),
+    ("PM2.5 (µg/m³)", "🌫️ PM2.5 Air Pollution Over Years", "Inferno"),
+]
 
-bar2 = px.bar(
-    country_data,
-    x="Year",
-    y="Births",
-    title="👶 Births Trend Over Years",
-    template="plotly_dark",
-    color="Births",
-    color_continuous_scale="Plasma"
-)
-st.plotly_chart(bar2, use_container_width=True)
-
+for metric, title, gradient in bar_charts:
+    if metric in country_data.columns:
+        fig = px.bar(
+            country_data,
+            x="Year",
+            y=metric,
+            title=title,
+            template="plotly_dark",
+            color=metric,
+            color_continuous_scale=gradient
+        )
+        fig.update_layout(height=400)
+        st.plotly_chart(fig, use_container_width=True)
 # ---------------------------------------------------
 # Raw Data
 # ---------------------------------------------------
