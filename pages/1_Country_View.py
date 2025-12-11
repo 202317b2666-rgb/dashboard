@@ -177,6 +177,23 @@ for metric, title, gradient in bar_charts:
         )
         fig.update_layout(height=400)
         st.plotly_chart(fig, use_container_width=True)
+
+# --- COVID Chart: Filter from 2020 only ---
+covid_data = country_data[country_data["Year"] >= 2020]
+
+if not covid_data.empty:
+    fig_covid = px.bar(
+        covid_data,
+        x="Year",
+        y="COVID Cases",
+        title="🦠 COVID Cases (2020 Onwards)",
+        template="plotly_dark",
+        color="COVID Cases",
+        color_continuous_scale="Viridis"
+    )
+    fig_covid.update_layout(height=400)
+    st.plotly_chart(fig_covid, use_container_width=True)
+
 # ---------------------------------------------------
 # Raw Data
 # ---------------------------------------------------
