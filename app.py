@@ -8,7 +8,7 @@ st.set_page_config(page_title="World Map — Country Details", layout="wide")
 
 # 1️⃣ Load datasets
 socio_df = pd.read_csv("final_with_socio_cleaned.csv")
-hex_df = pd.read_csv("HEX.csv")
+hex_df = pd.read_csv("Hex.csv")
 with open("countries.geo.json") as f:
     geojson = json.load(f)
 
