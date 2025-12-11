@@ -180,7 +180,6 @@ with trend_cols[1]:
 st.subheader("📊 Additional Visual Insights")
 
 bar_charts = [
-    ("COVID Cases", " COVID Cases Over Years", "Viridis"),
     ("Births", " Births Over Years", "Plasma"),
     ("GDP per Capita (USD)", " GDP per Capita Over Years", "Cividis"),
     ("Gini Index", " Gini Index Over Years", "Turbo"),
