@@ -8,7 +8,7 @@ import json
 st.title("🌍 Country View")
 
 # Load datasets
-hex_df = pd.read_csv("HEX.csv")
+hex_df = pd.read_csv("Hex.csv")
 
 with open("countries.geo.json", "r") as f:
     geojson_data = json.load(f)
@@ -17,7 +17,7 @@ with open("countries.geo.json", "r") as f:
 st.subheader("Select a Country")
 
 if "country" not in hex_df.columns:
-    st.error("❌ 'country' column not found in HEX.csv")
+    st.error("❌ 'country' column not found in Hex.csv")
 else:
     country_list = sorted(hex_df["country"].dropna().unique())
     selected_country = st.selectbox("Choose a Country", country_list)
@@ -105,4 +105,4 @@ else:
             unsafe_allow_html=True,
         )
     else:
-        st.warning("⚠ No HEX color available for this country.")
+        st.warning("⚠ No Hex color available for this country.")
