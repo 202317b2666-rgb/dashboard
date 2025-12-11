@@ -81,13 +81,13 @@ metric_cols = st.columns(4)
 full_metrics = [
     # ----- Economy & Inequality -----
     ("GDP per Capita (USD)", "💵"),
-    ("Gini Index", "📊"),
-    ("HDI", "📘"),
+    ("Gini Index", ""),
+    ("HDI", ""),
 
     # ----- Health & Environment -----
     ("Life Expectancy", "👶"),
-    ("Health Insurance (%)", "🏥"),
-    ("PM2.5 (µg/m³)"),
+    ("Health Insurance (%)", ""),
+    ("PM2.5 (µg/m³)", ""),
 
     # ----- Demographics -----
     ("Total Population", "👥"),
@@ -98,8 +98,8 @@ full_metrics = [
     ("Population Density", "🌍"),
 
     # ----- Vital Statistics -----
-    ("Births", "🍼"),
-    ("Deaths", "⚰️"),
+    ("Births", ""),
+    ("Deaths", ""),
 
     # ----- COVID -----
     ("COVID Cases", "🦠"),
