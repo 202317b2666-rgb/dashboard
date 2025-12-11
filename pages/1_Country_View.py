@@ -98,8 +98,8 @@ full_metrics = [
     ("Population Density", "🌍"),
 
     # ----- Vital Statistics -----
-    ("Births"),
-    ("Deaths"),
+    ("Births", "🍼"),
+    ("Deaths", "⚰️"),
 
     # ----- COVID -----
     ("COVID Cases", "🦠"),
