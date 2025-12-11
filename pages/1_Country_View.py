@@ -106,12 +106,14 @@ full_metrics = [
     ("COVID Deaths", "☠️"),
 ]
 
+
 for i, (metric, icon) in enumerate(full_metrics):
     val = row.get(metric, "NA")
     val = "No Data" if pd.isna(val) else round(val, 3)
 
     with metric_cols[i % 4]:
-        st.metric(f"{icon} {metric}", val)
+        label = f"{icon} {metric}" if icon else metric
+        st.metric(label, val)
 
 
 # ---------------------------------------------------
