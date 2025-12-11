@@ -49,83 +49,55 @@ fig.update_layout(
     clickmode='event+select'
 )
 
-# Display main map
+# ---------------- Display map ----------------
 clicked = st.plotly_chart(fig, use_container_width=True, key="world_map")
 
-# ---------------- Capture click ----------------
+# ---------------- Session state for popup ----------------
 if "selected_country" not in st.session_state:
     st.session_state.selected_country = None
 
-click = st.session_state.get("click_data", None)
+# ---------------- Popup container ----------------
+selected = st.selectbox("Select country for popup", df['ISO3'].unique(), index=0)
+st.session_state.selected_country = selected
 
-# For Streamlit, we capture click with plotly events
-clicked_country = st.session_state.get("clicked_country", None)
-if clicked_country is None:
-    # Use a workaround: user clicks in Plotly map
-    click_data = st.plotly_chart(fig, use_container_width=True, key="click_map")
-    # Normally Streamlit doesn't give event callback, so we simulate via selection
-    selected_points = fig.data[0].selectedpoints
-    if selected_points:
-        iso_clicked = df.iloc[selected_points[0]]['ISO3']
-        st.session_state.selected_country = iso_clicked
-
-# ---------------- Popup simulation ----------------
 if st.session_state.selected_country:
     country_data = df[df['ISO3'] == st.session_state.selected_country]
 
-    # Full-screen container with blurred background
-    st.markdown(
-        """
-        <style>
-        .popup {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(5px);
-            z-index: 9999;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .popup-content {
-            background: white;
-            border-radius: 10px;
-            width: 90%;
-            max-width: 1200px;
-            height: 80%;
-            display: flex;
-            padding: 20px;
-        }
-        .popup-left {
-            width: 40%;
-            padding-right: 20px;
-        }
-        .popup-right {
-            width: 60%;
-        }
-        .close-btn {
-            position: absolute;
-            top: 10px;
-            right: 20px;
-            font-size: 25px;
-            font-weight: bold;
-            cursor: pointer;
-            color: white;
-        }
-        </style>
-        <div class="popup">
-            <div class="close-btn" onclick="document.querySelector('.popup').style.display='none';">×</div>
-            <div class="popup-content">
-                <div class="popup-left" id="map-container"></div>
-                <div class="popup-right" id="charts-container"></div>
-            </div>
+    # Popup styling
+    st.markdown("""
+    <style>
+    .popup-container {
+        position: relative;
+        background: rgba(0,0,0,0.6);
+        padding: 50px 0;
+    }
+    .popup-box {
+        background: white;
+        border-radius: 10px;
+        width: 80%;
+        max-width: 1000px;
+        margin: 0 auto;
+        display: flex;
+        padding: 20px;
+        backdrop-filter: blur(5px);
+    }
+    .popup-left {
+        width: 40%;
+        padding-right: 20px;
+    }
+    .popup-right {
+        width: 60%;
+    }
+    </style>
+    <div class="popup-container">
+        <div class="popup-box">
+            <div class="popup-left" id="map-container"></div>
+            <div class="popup-right" id="charts-container"></div>
         </div>
-        """,
-        unsafe_allow_html=True
-    )
+    </div>
+    """, unsafe_allow_html=True)
 
-    # Plot country map in left
+    # Plot country map
     country_map = px.choropleth(
         country_data,
         geojson=geojson,
@@ -136,7 +108,7 @@ if st.session_state.selected_country:
     country_map.update_geos(fitbounds="locations", visible=False)
     st.plotly_chart(country_map, use_container_width=True, key="popup_map")
 
-    # Plot line charts in right
+    # Plot line charts
     attributes = ['GDP_per_capita','Gini_Index','Life_Expectancy','PM25','Health_Insurance','Median_Age_Est','COVID_Deaths','COVID_Cases']
     chart_fig = go.Figure()
     for attr in attributes:
