@@ -1,176 +1,108 @@
+# ----------------------- COUNTRY VIEW PAGE -----------------------
+
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 import plotly.express as px
+import json
 
-# ---------------------------------------------------
-# Page Setup
-# ---------------------------------------------------
-st.set_page_config(page_title="Country Dashboard", layout="wide")
-st.title("📊 Country Insights Explorer")
+st.title("🌍 Country View")
 
-# ---------------------------------------------------
-# Load Data
-# ---------------------------------------------------
-df = pd.read_csv("final_with_socio_cleaned.csv")
+# Load datasets
+hex_df = pd.read_csv("HEX.csv")
 
-# Rename columns (UI friendly)
-df = df.rename(columns={
-    "Country": "Country",
-    "ISO3": "ISO3",
-    "Year": "Year",
-    "GDP_per_capita": "GDP per Capita (USD)",
-    "Gini_Index": "Gini Index",
-    "Life_Expectancy": "Life Expectancy",
-    "PM25": "PM2.5 (µg/m³)",
-    "Health_Insurance": "Health Insurance (%)",
-    "Median_Age_Est": "Median Age (Estimates)",
-    "Median_Age_Mid": "Median Age (Medium)",
-    "COVID_Deaths": "COVID Deaths",
-    "COVID_Cases": "COVID Cases",
-    "Population_Density": "Population Density",
-    "Total_Population": "Total Population",
-    "Male_Population": "Male Population",
-    "Female_Population": "Female Population",
-    "Births": "Births",
-    "Deaths": "Deaths",
-    "HDI": "HDI"
-})
+with open("countries.geo.json", "r") as f:
+    geojson_data = json.load(f)
 
-df = df.drop_duplicates(subset=["Country", "Year"])
+# ----------------------- COUNTRY SELECTION -----------------------
+st.subheader("Select a Country")
 
-# ---------------------------------------------------
-# Filters
-# ---------------------------------------------------
-countries = sorted(df["Country"].unique())
-years = sorted(df["Year"].unique())
+if "country" not in hex_df.columns:
+    st.error("❌ 'country' column not found in HEX.csv")
+else:
+    country_list = sorted(hex_df["country"].dropna().unique())
+    selected_country = st.selectbox("Choose a Country", country_list)
 
-selected_country = st.selectbox("🌍 Select Country", countries)
-selected_year = st.slider("📅 Select Year", int(min(years)), int(max(years)), int(max(years)))
+    # Filter data
+    country_data = hex_df[hex_df["country"] == selected_country]
 
-# Filter the row
-row = df[(df["Country"] == selected_country) & (df["Year"] == selected_year)]
-if row.empty:
-    st.warning("⚠ No data for this year.")
-    st.stop()
+    # ----------------------- COUNTRY DATA TABLE -----------------------
+    st.subheader(f"📄 Data for {selected_country}")
+    st.dataframe(country_data)
 
-row = row.iloc[0]
-country_data = df[df["Country"] == selected_country]
+    # ----------------------- NUMERIC COLUMNS -----------------------
+    numeric_columns = country_data.select_dtypes(include=["int64", "float64"]).columns.tolist()
 
-# ---------------------------------------------------
-# PAGE TITLE
-# ---------------------------------------------------
-st.markdown(f"### 📍 {selected_country} — {selected_year}")
+    if len(numeric_columns) == 0:
+        st.warning("⚠ No numeric columns available for visualization.")
+    else:
+        # ----------------------- GRADIENT BAR CHART -----------------------
+        st.subheader("📊 Gradient Bar Chart")
 
-# ---------------------------------------------------
-# Metric Cards
-# ---------------------------------------------------
-st.subheader("📌 Key Indicators")
+        bar_metric = st.selectbox(
+            "Select a Metric for Bar Chart",
+            numeric_columns,
+            key="bar_metric"
+        )
 
-metric_cols = st.columns(4)
+        fig_bar = px.bar(
+            country_data,
+            x="country",
+            y=bar_metric,
+            color=country_data[bar_metric],
+            title=f"{bar_metric} for {selected_country}",
+            color_continuous_scale="Viridis"  # gradient
+        )
 
-metrics = [
-    ("GDP per Capita (USD)", "💵"),
-    ("Life Expectancy", "👶"),
-    ("Median Age (Medium)", "📈"),
-    ("Population Density", "🌍"),
-    ("PM2.5 (µg/m³)", "🌫️"),
-    ("Health Insurance (%)", "🏥"),
-    ("HDI", "📘"),
-    ("Gini Index", "📊"),
-]
+        fig_bar.update_layout(
+            template="plotly_white",
+            height=450,
+            coloraxis_colorbar=dict(title="Value"),
+        )
 
-for i, (m, icon) in enumerate(metrics):
-    val = row.get(m, "NA")
-    val = "No Data" if pd.isna(val) else round(val, 3)
-    with metric_cols[i % 4]:
-        st.metric(f"{icon} {m}", val)
+        st.plotly_chart(fig_bar, use_container_width=True)
 
-# ---------------------------------------------------
-# Premium Stock-Market Style Line Chart
-# ---------------------------------------------------
-def stock_line_chart(df, y, title):
-    fig = go.Figure()
+        # ----------------------- LINE CHART -----------------------
+        st.subheader("📈 Line Chart Over Years")
 
-    # Glow line
-    fig.add_trace(go.Scatter(
-        x=df["Year"],
-        y=df[y],
-        mode="lines",
-        line=dict(width=10, color="rgba(0, 255, 255, 0.2)"),
-        hoverinfo="skip",
-        showlegend=False
-    ))
+        if "year" not in country_data.columns:
+            st.warning("⚠ 'year' column missing. Cannot draw line chart.")
+        else:
+            line_metric = st.selectbox(
+                "Select a Metric for Line Chart",
+                numeric_columns,
+                key="line_metric"
+            )
 
-    # Neon line
-    fig.add_trace(go.Scatter(
-        x=df["Year"],
-        y=df[y],
-        mode="lines",
-        line=dict(width=3, color="#00FFFF"),
-        hovertemplate="<b>Year %{x}</b><br>%{y}<extra></extra>",
-        name=title
-    ))
+            fig_line = px.line(
+                country_data.sort_values("year"),
+                x="year",
+                y=line_metric,
+                markers=True,
+                title=f"{line_metric} Over Years — {selected_country}"
+            )
 
-    fig.update_layout(
-        template="plotly_dark",
-        title=title,
-        height=420,
-        plot_bgcolor="black",
-        paper_bgcolor="black",
-        xaxis=dict(showgrid=False, color="white"),
-        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.08)", color="white"),
-        margin=dict(l=20, r=20, t=50, b=20),
-    )
+            fig_line.update_layout(
+                template="plotly_white",
+                height=450
+            )
 
-    return fig
+            st.plotly_chart(fig_line, use_container_width=True)
 
-# ---------------------------------------------------
-# Trend Charts (Stock style)
-# ---------------------------------------------------
-st.subheader("📈 Historical Trends (Stock Style)")
+    # ----------------------- HEX COLOR BOX -----------------------
+    st.subheader("🎨 HEX Color for Map")
 
-trend_cols = st.columns(2)
-
-with trend_cols[0]:
-    st.plotly_chart(stock_line_chart(country_data, "GDP per Capita (USD)", "💵 GDP Trend"), use_container_width=True)
-
-with trend_cols[1]:
-    st.plotly_chart(stock_line_chart(country_data, "Life Expectancy", "👶 Life Expectancy Trend"), use_container_width=True)
-
-with trend_cols[0]:
-    st.plotly_chart(stock_line_chart(country_data, "PM2.5 (µg/m³)", "🌫️ PM2.5 Pollution Trend"), use_container_width=True)
-
-with trend_cols[1]:
-    st.plotly_chart(stock_line_chart(country_data, "HDI", "📘 HDI Trend Over Time"), use_container_width=True)
-
-# ---------------------------------------------------
-# Bar Charts
-# ---------------------------------------------------
-st.subheader("📊 Additional Visual Insights")
-
-bar1 = px.bar(
-    country_data,
-    x="Year",
-    y="COVID Cases",
-    title="🦠 COVID Cases Over Years",
-    template="plotly_dark",
-)
-bar1.update_layout(height=400)
-st.plotly_chart(bar1, use_container_width=True)
-
-bar2 = px.bar(
-    country_data,
-    x="Year",
-    y="Births",
-    title="👶 Births Trend Over Years",
-    template="plotly_dark",
-)
-bar2.update_layout(height=400)
-st.plotly_chart(bar2, use_container_width=True)
-
-# ---------------------------------------------------
-# Raw Data
-# ---------------------------------------------------
-st.markdown("### 🔍 Full Data for Selected Year")
-st.dataframe(pd.DataFrame([row]))
+    if "hex" in country_data.columns:
+        hex_color = country_data["hex"].iloc[0]
+        st.markdown(
+            f"""
+            <div style="
+                width:150px; height:150px; 
+                background:{hex_color}; 
+                border-radius:12px; 
+                border:2px solid #333;
+            "></div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.warning("⚠ No HEX color available for this country.")
