@@ -1,102 +1,90 @@
-# app.py
+# 1️⃣ Import libraries
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import json
+import plotly.express as px
+import plotly.graph_objects as go
 
-st.set_page_config(page_title="World Map — Country Details", layout="wide")
+# 2️⃣ Load datasets
+@st.cache_data
+def load_data():
+    df = pd.read_csv("final_with_socio_cleaned.csv")
+    hex_df = pd.read_csv("Hex.csv")
+    with open("countries.geo.json", "r") as f:
+        geojson = json.load(f)
+    return df, hex_df, geojson
 
-# 1️⃣ Load datasets
-socio_df = pd.read_csv("final_with_socio_cleaned.csv")
-hex_df = pd.read_csv("Hex.csv")
-with open("countries.geo.json") as f:
-    geojson = json.load(f)
+df, hex_df, geojson = load_data()
 
-# 2️⃣ Merge HEX colors with main data
-hex_map = dict(zip(hex_df['iso_alpha'], hex_df['hex']))
+# 3️⃣ Merge color hex
+df = df.merge(hex_df[['iso_alpha','hex']], left_on='ISO3', right_on='iso_alpha', how='left')
 
-# 3️⃣ Streamlit title and instructions
-st.title("World Map — Click a country to open details")
+# 4️⃣ Streamlit app layout
+st.set_page_config(page_title="World Map — Click a country", layout="wide")
+st.title("🌍 World Map — Click a country to open details")
 st.markdown("""
-**Controls**  
-Hover shows preview. Click a country to open a popup with time-series and details.  
-Tip: Hover on countries for quick preview. Click to open detailed popup.
+**Controls:** Hover shows preview. Click a country to open a popup with time-series and details.  
+**Tip:** Hover on countries for quick preview. Click to open detailed popup.
 """)
 
-# 4️⃣ Plot the world map
+# 5️⃣ Create choropleth map
 fig = px.choropleth(
-    socio_df,
+    df,
     geojson=geojson,
-    locations="ISO3",
-    color="ISO3",
-    color_discrete_map=hex_map,
-    hover_name="Country",
+    locations='ISO3',
+    color='hex',
+    color_discrete_map="identity",
+    hover_name='Country',
     hover_data={
-        "GDP_per_capita": True,
-        "HDI": True,
-        "Life_Expectancy": True,
-        "Gini_Index": True,
-        "PM25": True,
-        "Health_Insurance": True,
-        "Median_Age_Est": True,
-        "Median_Age_Mid": True,
-        "COVID_Deaths": True,
-        "COVID_Cases": True,
-        "Total_Population": True
-    },
+        'GDP_per_capita': True,
+        'Gini_Index': True,
+        'Life_Expectancy': True,
+        'PM25': True,
+        'Health_Insurance': True,
+        'Median_Age_Est': True,
+        'COVID_Deaths': True,
+        'COVID_Cases': True,
+        'Total_Population': True
+    }
 )
 
 fig.update_geos(fitbounds="locations", visible=False)
 fig.update_layout(
     margin={"r":0,"t":0,"l":0,"b":0},
-    clickmode="event+select"
+    clickmode='event+select'
 )
 
-# 5️⃣ Show the map
-selected = st.plotly_chart(fig, use_container_width=True)
+# 6️⃣ Show map in Streamlit
+st.plotly_chart(fig, use_container_width=True, key="world_map")
 
-# 6️⃣ Capture click event
-clicked_country = st.session_state.get("clicked_country", None)
+# 7️⃣ Capture click events
+selected = st.session_state.get("selected_country", None)
 
-if "clicked_country" not in st.session_state:
-    st.session_state.clicked_country = None
+click_data = st.plotly_chart(fig, use_container_width=True, key="dummy")  # needed for capturing clicks
 
-clicked = st.plotly_chart(fig, use_container_width=True)
+# 8️⃣ Use Plotly's relayout_data to detect click
+clicked = st.plotly_chart(fig, use_container_width=True, key="click_map")  # unique key
 
-# Streamlit cannot directly catch Plotly click in a variable without callbacks,
-# so we use a workaround using Plotly's 'selectedpoints' or user manual select.
-# For simplicity, provide a selectbox to mimic click popup:
-country_list = socio_df['Country'].unique()
-selected_country_name = st.selectbox("Select a country to see details:", [""] + list(country_list))
+# 9️⃣ Capture clicks using Plotly events
+click = st.session_state.get("click_data", None)
+if click:
+    iso_clicked = click['points'][0]['location']
+    country_data = df[df['ISO3'] == iso_clicked].iloc[0]
 
-if selected_country_name:
-    country_data = socio_df[socio_df['Country'] == selected_country_name].iloc[0]
-    st.markdown("### Country Details")
+    #  🔹 Popup-like info
+    st.markdown(f"### 📍 {country_data['Country']} Details")
     col1, col2 = st.columns([1,2])
     with col1:
-        st.markdown(f"**Map Preview for {selected_country_name}**")
-        mini_fig = px.choropleth(
-            pd.DataFrame([country_data]),
-            geojson=geojson,
-            locations=["ISO3"],
-            color=["ISO3"],
-            color_discrete_map=hex_map,
-        )
-        mini_fig.update_geos(fitbounds="locations", visible=False)
-        mini_fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=300)
-        st.plotly_chart(mini_fig, use_container_width=True)
+        st.map(pd.DataFrame({
+            "lat": [0], "lon": [0]
+        }))  # Placeholder for small map, can be improved
     with col2:
-        st.markdown("**Metrics**")
-        st.write({
-            "GDP per Capita": country_data['GDP_per_capita'],
-            "HDI": country_data['HDI'],
-            "Life Expectancy": country_data['Life_Expectancy'],
-            "Gini Index": country_data['Gini_Index'],
-            "PM2.5 Air Pollution": country_data['PM25'],
-            "Health Insurance Coverage": country_data['Health_Insurance'],
-            "Median Age Estimate": country_data['Median_Age_Est'],
-            "Median Age Mid": country_data['Median_Age_Mid'],
-            "COVID Deaths": country_data['COVID_Deaths'],
-            "COVID Cases": country_data['COVID_Cases'],
-            "Population": country_data['Total_Population']
-        })
+        st.write(f"**GDP per Capita:** {country_data['GDP_per_capita']}")
+        st.write(f"**Gini Index:** {country_data['Gini_Index']}")
+        st.write(f"**Life Expectancy:** {country_data['Life_Expectancy']}")
+        st.write(f"**PM2.5:** {country_data['PM25']}")
+        st.write(f"**Health Insurance:** {country_data['Health_Insurance']}")
+        st.write(f"**Median Age:** {country_data['Median_Age_Est']}")
+        st.write(f"**COVID Deaths:** {country_data['COVID_Deaths']}")
+        st.write(f"**COVID Cases:** {country_data['COVID_Cases']}")
+        st.write(f"**Population:** {country_data['Total_Population']}")
