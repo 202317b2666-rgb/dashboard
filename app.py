@@ -11,7 +11,7 @@ st.write("Click on a country in the map to see detailed indicators over time.")
 # -------------------------
 # Load HEX CSV
 # -------------------------
-hex_df = pd.read_csv("HEX.csv")
+hex_df = pd.read_csv("Hex.csv")
 
 # Clean column names (strip spaces, hidden characters)
 hex_df.columns = hex_df.columns.str.strip().str.replace('\u200b','')
