@@ -7,7 +7,7 @@ st.title("🌍 Interactive Global Health & Socio-Economic Dashboard")
 st.write("Click on a country in the map to see detailed indicators over time.")
 
 # Load HEX.csv
-hex_df = pd.read_csv("HEX.csv")
+hex_df = pd.read_csv("Hex.csv")
 
 # Clean column names
 hex_df.columns = hex_df.columns.str.strip()
