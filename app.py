@@ -17,7 +17,7 @@ with open("countries.geo.json", "r", encoding="utf-8") as f:
     world_geojson = json.load(f)
 
 # ------------------------------------------------------------
-# 2. LOAD HEX CSV + VALIDATE
+# 2. LOAD HEX CSV + VALIDATE COLUMN 2 = ISO, COLUMN 3 = HEX
 # ------------------------------------------------------------
 df_hex = pd.read_csv("Hex.csv", dtype=str, keep_default_na=False)
 
@@ -27,17 +27,21 @@ def looks_like_iso3(s):
 def looks_like_hex(s):
     return isinstance(s, str) and bool(re.fullmatch(r"#?[0-9A-Fa-f]{6}", s.strip()))
 
-iso_col = df_hex.columns[1]   # 2nd column
-hex_col = df_hex.columns[3]   # 4th column
+# Force 2nd and 4th columns
+iso_col = df_hex.columns[1]     # 2nd column
+hex_col = df_hex.columns[3]     # 4th column
 
+# Add validation flags
 df_hex["ISO_Valid"] = df_hex[iso_col].apply(looks_like_iso3)
 df_hex["HEX_Valid"] = df_hex[hex_col].apply(looks_like_hex)
 
+# Show errors in UI if any
 invalid_rows = df_hex[(df_hex["ISO_Valid"] == False) | (df_hex["HEX_Valid"] == False)]
 if not invalid_rows.empty:
     st.error("Invalid ISO3 or HEX values found in Hex.csv")
     st.dataframe(invalid_rows)
 
+# Clean and standardize
 df_hex["iso3"] = df_hex[iso_col].str.extract(r"([A-Za-z]{3})")[0].str.upper()
 df_hex["hex"] = df_hex[hex_col].apply(
     lambda h: ("#" + h.strip()) if looks_like_hex(h) and not h.startswith("#") else h
@@ -65,19 +69,12 @@ df["hex"] = df["hex"].fillna("#cccccc")     # default grey
 color_map = {row.iso3: row.hex for row in df.itertuples(index=False)}
 
 # ------------------------------------------------------------
-# 5. LOAD FINAL DATA CSV
-# ------------------------------------------------------------
-data = pd.read_csv("final_with_socio_cleaned.csv")
-data.columns = data.columns.str.strip()
-data['ISO3'] = data['ISO3'].str.upper()  # ensure proper uppercase
-
-# ------------------------------------------------------------
-# 6. WORLD MAP FUNCTION
+# 5. WORLD MAP FUNCTION
 # ------------------------------------------------------------
 def build_world_map(df):
     fig = px.choropleth(
         df,
-        geojson=world_geojson,
+        geojson=world_geojson, 
         locations="iso3",
         featureidkey="id",
         color="iso3",
@@ -85,11 +82,13 @@ def build_world_map(df):
         projection="natural earth",
         color_discrete_map=color_map,
     )
+
     fig.update_traces(
         marker_line_width=0.8,
         marker_line_color="white",
         hovertemplate="<b>%{hovertext}</b><extra></extra>",
     )
+
     fig.update_layout(
         margin=dict(l=0, r=0, t=0, b=0),
         paper_bgcolor="#b9e6ff",
@@ -104,8 +103,12 @@ def build_world_map(df):
         height=650,
         dragmode=False,
     )
+
     return fig
 
+# ------------------------------------------------------------
+# 6. BUILD FINAL MAP
+# ------------------------------------------------------------
 fig = build_world_map(df)
 
 # ------------------------------------------------------------
@@ -115,29 +118,32 @@ st.markdown(
     """
     <style>
     .block-container {
-        padding: 0 !important;
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
+        padding-left: 0rem !important;
+        padding-right: 0rem !important;
         max-width: 100% !important;
     }
-    .overlay {
+    /* Popup overlay */
+    .popup-overlay {
         position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.7);
-        z-index: 1000;
-        display: flex;
-        justify-content: center;
-        align-items: center;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background-color: rgba(0,0,0,0.7);
+        backdrop-filter: blur(5px);
+        z-index: 9999;
     }
-    .popup {
-        background: #111;
+    .popup-content {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: #111;
+        color: white;
         padding: 20px;
         border-radius: 8px;
-        width: 80%;
-        max-width: 1000px;
-        display: flex;
-        color: white;
+        max-width: 90%;
+        max-height: 90%;
+        overflow-y: auto;
     }
     </style>
     """,
@@ -145,49 +151,59 @@ st.markdown(
 )
 
 # ------------------------------------------------------------
-# 8. DISPLAY WORLD MAP
+# 8. DISPLAY MAP
 # ------------------------------------------------------------
 st.plotly_chart(fig, use_container_width=True)
 
 # ------------------------------------------------------------
-# 9. COUNTRY SELECTION + POPUP
+# 9. LOAD FINAL SOCIO DATA
 # ------------------------------------------------------------
-if 'selected_country' not in st.session_state:
-    st.session_state.selected_country = None
+data = pd.read_csv("final_with_socio_cleaned.csv")
+data.columns = data.columns.str.strip()
+if 'ISO3' not in data.columns:
+    st.error("ISO3 column missing in final_with_socio_cleaned.csv")
+else:
+    data['ISO3'] = data['ISO3'].str.strip().str.upper()
+
+# ------------------------------------------------------------
+# 10. COUNTRY SELECT + POPUP HANDLER
+# ------------------------------------------------------------
+if "show_popup" not in st.session_state:
+    st.session_state.show_popup = False
+if "selected_country" not in st.session_state:
+    st.session_state.selected_country = ""
 
 def handle_country_click():
+    st.session_state.show_popup = True
     st.session_state.selected_country = st.session_state.country_select
 
+iso3_list = sorted(data['ISO3'].dropna().unique())
 st.selectbox(
     "Select country for popup (hidden, used internally)",
-    [""] + sorted(data['ISO3'].unique()),
+    [""] + iso3_list,
     key="country_select",
     on_change=handle_country_click
 )
 
 # ------------------------------------------------------------
-# 10. SHOW POPUP WINDOW
+# 11. POPUP DISPLAY
 # ------------------------------------------------------------
-if st.session_state.selected_country:
-    c = st.session_state.selected_country
-    country_data = data[data['ISO3'] == c]
+if st.session_state.show_popup and st.session_state.selected_country:
+    country_code = st.session_state.selected_country
+    country_data = data[data['ISO3'] == country_code]
 
     if not country_data.empty:
-        st.markdown(f"""
-        <div class="overlay">
-            <div class="popup">
-                <div style="flex:1;margin-right:20px;">
-                    <h3>{country_data['Country'].iloc[0]}</h3>
-                    <p>ISO3: {c}</p>
-                    <!-- You can insert a small static map image if needed -->
-                </div>
-                <div style="flex:2;">
-                    <!-- Placeholder for line charts -->
-                    <p>Metrics and line charts go here</p>
+        st.markdown(
+            f"""
+            <div class="popup-overlay">
+                <div class="popup-content">
+                    <h2>{country_data.iloc[0]['Country']}</h2>
+                    <p>GDP per capita: {country_data.iloc[0]['GDP_per_capita']}</p>
+                    <p>Gini Index: {country_data.iloc[0]['Gini_Index']}</p>
+                    <p>Life Expectancy: {country_data.iloc[0]['Life_Expectancy']}</p>
+                    <button onclick="document.querySelector('.popup-overlay').style.display='none';">Close</button>
                 </div>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Reset after popup display to avoid stuck
-    st.session_state.selected_country = None
+            """,
+            unsafe_allow_html=True
+        )
