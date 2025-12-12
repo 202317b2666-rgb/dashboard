@@ -20,7 +20,7 @@ with open("countries.geo.json") as f:
 # --------------------------
 # Load socio-economic dataset
 # --------------------------
-socio_df = pd.read_csv("final_socio_cleaned.csv")
+socio_df = pd.read_csv("final_with_socio_cleaned.csv")
 socio_df.columns = socio_df.columns.str.strip()
 socio_df['ISO3'] = socio_df['ISO3'].str.upper().str.strip()
 
