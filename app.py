@@ -1,44 +1,76 @@
 import streamlit as st
 import pandas as pd
-import json
 import plotly.express as px
 
-st.set_page_config(page_title="World Map Clean View", layout="wide")
+# -------------------------
+# Load your datasets
+# -------------------------
+# World map coloring info (hex colors)
+hex_df = pd.read_csv("HEX.csv")  # columns: country, iso_alpha, hex
 
-# Title
-st.markdown("<h1 style='text-align:center;'>🌍 Clean World Map View</h1>", unsafe_allow_html=True)
+# Socio-economic data
+data_df = pd.read_csv("final_with_socio_cleaned.csv")  # detailed indicators
 
-# Load files
-hex_df = pd.read_csv("Hex.csv")
-with open("countries.geo.json", "r") as f:
-    geojson_data = json.load(f)
+# -------------------------
+# Streamlit page
+# -------------------------
+st.set_page_config(page_title="Global Health & Socio-Economic Dashboard", layout="wide")
+st.title("🌍 Interactive Global Health & Socio-Economic Dashboard")
+st.write("Hover over a country to highlight. Click to see detailed indicators.")
 
-# Merge HEX colors with geojson country codes
-hex_df = hex_df.rename(columns={"iso_alpha": "ISO_A3"})
-
-# Create map
+# -------------------------
+# Choropleth Map
+# -------------------------
 fig = px.choropleth(
     hex_df,
-    geojson=geojson_data,
-    locations="ISO_A3",
-    color="hex",
-    color_discrete_map=hex_df.set_index("ISO_A3")["hex"].to_dict(),
+    locations="iso_alpha",
+    color="hex",  # we can use hex just for coloring
     hover_name="country",
+    color_discrete_map={row['iso_alpha']: row['hex'] for idx, row in hex_df.iterrows()},
+    scope="world",
 )
 
-# Clean look settings
+# Update layout: background, remove borders
 fig.update_geos(
     showcountries=True,
-    showcoastlines=False,
-    projection_type="natural earth",
-    bgcolor="#87CEEB"  # light blue ocean
+    countrycolor="white",
+    showcoastlines=True,
+    coastlinecolor="white",
+    showframe=False,
+    projection_type='natural earth'
 )
-
 fig.update_layout(
-    margin={"r":0, "t":0, "l":0, "b":0},
-    height=700,
-    paper_bgcolor="#87CEEB",  # blue background
-    plot_bgcolor="#87CEEB",
+    geo=dict(bgcolor='rgb(40, 100, 160)'),  # ocean-blue background
+    margin={"r":0,"t":0,"l":0,"b":0},
 )
 
-st.plotly_chart(fig, use_container_width=True)
+# Highlight effect on hover
+fig.update_traces(
+    marker_line_width=0,
+    hoverinfo="location+name",
+    hoverlabel=dict(bgcolor="white", font_size=14, font_family="Arial"),
+    selector=dict(type='choropleth')
+)
+
+# -------------------------
+# Render Map
+# -------------------------
+clicked = st.plotly_chart(fig, use_container_width=True)
+
+# -------------------------
+# Click to show details
+# -------------------------
+# NOTE: Plotly's native click event in Streamlit is limited
+# For demonstration, use a selectbox to simulate click
+country_list = hex_df['country'].tolist()
+selected_country = st.selectbox("Select a country to see details:", country_list)
+
+if selected_country:
+    st.subheader(f"Detailed Indicators for {selected_country}")
+    
+    country_data = data_df[data_df['country'] == selected_country].sort_values("Year")
+    
+    # Example line charts
+    st.line_chart(country_data[["Year", "GDP_per_capita"]].set_index("Year"))
+    st.line_chart(country_data[["Year", "Life_Expectancy"]].set_index("Year"))
+    st.line_chart(country_data[["Year", "HDI"]].set_index("Year"))
