@@ -10,7 +10,7 @@ st.set_page_config(page_title="Global Dashboard", layout="wide")
 # -------------------------
 # Load files
 # -------------------------
-hex_df = pd.read_csv("hex.csv", dtype=str)
+hex_df = pd.read_csv("Hex.csv", dtype=str)
 hex_df.columns = hex_df.columns.str.strip()
 # make sure iso code column name and values are correct
 hex_df['ISO3'] = hex_df['iso_alpha'].str.upper().str.strip()
