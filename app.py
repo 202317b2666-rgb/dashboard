@@ -16,7 +16,7 @@ st.markdown(
 # --------------------
 # Load HEX + GeoJSON
 # --------------------
-hex_df = pd.read_csv("Hex.csv")   # your file
+hex_df = pd.read_csv("HEX.csv")   # your file
 geojson = json.load(open("countries.geo.json", "r"))
 
 # Prepare Data
