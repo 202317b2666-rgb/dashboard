@@ -10,7 +10,7 @@ st.write("Click on a country in the map to see detailed indicators over time.")
 # --------------------------
 # Load HEX map data
 # --------------------------
-hex_df = pd.read_csv("HEX.csv")
+hex_df = pd.read_csv("Hex.csv")
 hex_df.columns = hex_df.columns.str.strip()
 hex_df['iso_alpha'] = hex_df['iso_alpha'].str.upper().str.strip()
 
