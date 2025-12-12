@@ -1,70 +1,53 @@
-# 1️⃣ Import libraries
+# app.py
 import streamlit as st
-import pandas as pd
-import plotly.express as px
-import json
+import os
 
-# 2️⃣ Load data
-hex_df = pd.read_csv("Hex.csv")  # Columns: country, iso_alpha, hex
-with open("countries.geo.json") as f:
-    geojson_data = json.load(f)
+st.set_page_config(page_title="Interactive SVG World Map", layout="wide")
 
-# 3️⃣ Merge HEX colors into GeoJSON properties
-for feature in geojson_data['features']:
-    iso = feature['properties']['ISO_A3']
-    color = hex_df.loc[hex_df['iso_alpha'] == iso, 'hex'].values
-    feature['properties']['color'] = color[0] if len(color) > 0 else "#CCCCCC"
+st.title("Interactive World Map with Hover & Click Effects")
 
-# 4️⃣ Create Plotly choropleth map
-fig = px.choropleth(
-    geojson=geojson_data,
-    locations=[f['properties']['ISO_A3'] for f in geojson_data['features']],
-    color=[f['properties']['color'] for f in geojson_data['features']],
-    color_discrete_map="identity",
-)
+# Load your SVG
+svg_file = "Life.svg"  # <-- Replace with your SVG file name
+if not os.path.exists(svg_file):
+    st.error(f"{svg_file} not found! Please add your SVG to this folder.")
+else:
+    with open(svg_file, "r", encoding="utf-8") as f:
+        svg_content = f.read()
 
-# 5️⃣ Default layout for borders
-fig.update_traces(
-    hoverinfo="location",
-    hovertemplate="<b>%{location}</b>",
-    marker_line_width=0.5,  # default border width
-    marker_line_color="black",
-)
+# Embed SVG with JS for hover & click
+svg_html = f"""
+<style>
+    svg path {{
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }}
+    svg path:hover {{
+        stroke: #FF0000;
+        stroke-width: 3px;
+        transform: scale(1.05);
+    }}
+    svg path.clicked {{
+        stroke: #00FF00;
+        stroke-width: 3px;
+    }}
+</style>
 
-# 6️⃣ Add interactive "pop-out" effect using hover
-fig.update_traces(
-    marker=dict(
-        line=dict(width=0.5, color="black")
-    ),
-    selector=dict(type="choropleth")
-)
+<div>
+{svg_content}
+</div>
 
-# Add hover/click visual effect
-fig.update_traces(
-    hoverlabel=dict(
-        bgcolor="white",
-        font_size=14,
-        font_family="Arial"
-    ),
-    selected=dict(
-        marker=dict(line=dict(width=3, color="red")),
-        opacity=1
-    ),
-    unselected=dict(
-        opacity=0.6
-    )
-)
+<script>
+const paths = document.querySelectorAll('svg path');
 
-# 7️⃣ Update geo layout
-fig.update_layout(
-    geo=dict(
-        showframe=False,
-        showcoastlines=True,
-        projection_type='natural earth',
-    ),
-    margin={"r":0,"t":0,"l":0,"b":0},
-)
+paths.forEach(path => {{
+    path.addEventListener('click', () => {{
+        paths.forEach(p => p.classList.remove('clicked'));  // remove from others
+        path.classList.add('clicked');                     // highlight clicked
+        console.log('Clicked country id:', path.id);      // shows country id in console
+    }});
+}});
+</script>
+"""
 
-# 8️⃣ Streamlit app
-st.title("Interactive World Map with Click Pop-Out Effect")
-st.plotly_chart(fig, use_container_width=True)
+# Render in Streamlit
+st.components.v1.html(svg_html, height=800, scrolling=True)
