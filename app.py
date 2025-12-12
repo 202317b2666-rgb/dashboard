@@ -6,7 +6,7 @@ import plotly.express as px
 # Load your datasets
 # -------------------------
 # World map coloring info (hex colors)
-hex_df = pd.read_csv("HEX.csv")  # columns: country, iso_alpha, hex
+hex_df = pd.read_csv("Hex.csv")  # columns: country, iso_alpha, hex
 
 # Socio-economic data
 data_df = pd.read_csv("final_with_socio_cleaned.csv")  # detailed indicators
