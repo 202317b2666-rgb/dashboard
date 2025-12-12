@@ -4,81 +4,56 @@ import pandas as pd
 import pydeck as pdk
 import json
 
-st.set_page_config(layout="wide")
-st.title("Interactive World Map (2D Highlight)")
+st.title("Interactive World Map - 2D")
 
-# 1️⃣ Load your datasets
-countries_gdf = json.load(open("countries.geo.json", "r"))
-hex_df = pd.read_csv("Hex.csv")  # columns: country, iso_alpha, hex
+# 1️⃣ Load your HEX color CSV
+hex_df = pd.read_csv("Hex.csv")  # Columns: country, iso_alpha, hex
 
-# 2️⃣ Prepare data for PyDeck
-# Map GeoJSON features to a list of dicts for PyDeck
-country_polygons = []
-for feature in countries_gdf['features']:
-    iso = feature['properties']['ISO_A3']
-    country_name = feature['properties']['ADMIN']
-    coords = feature['geometry']['coordinates']
-    hex_color = hex_df.loc[hex_df['iso_alpha'] == iso, 'hex'].values
-    color = [0, 0, 0] if len(hex_color) == 0 else [int(hex_color[0][1:3],16),
-                                                   int(hex_color[0][3:5],16),
-                                                   int(hex_color[0][5:7],16)]
-    country_polygons.append({
-        "name": country_name,
-        "iso": iso,
-        "coordinates": coords,
-        "color": color
-    })
+# Convert HEX to RGB for PyDeck
+def hex_to_rgb(hex_color):
+    hex_color = hex_color.lstrip("#")
+    return [int(hex_color[i:i+2], 16) for i in (0, 2, 4)]
 
-# 3️⃣ Flatten coordinates for PolygonLayer (PyDeck expects a list of [lng, lat])
-def flatten_coords(coords):
-    # Handles multipolygon vs polygon
-    if isinstance(coords[0][0], list):
-        # MultiPolygon
-        return [c for part in coords for c in part]
+hex_df['rgb'] = hex_df['hex'].apply(hex_to_rgb)
+
+# 2️⃣ Load GeoJSON
+with open("countries.geo.json", "r", encoding="utf-8") as f:
+    geojson = json.load(f)
+
+# 3️⃣ Merge colors into GeoJSON
+for feature in geojson['features']:
+    iso_code = feature['properties'].get('ISO_A3')
+    match = hex_df[hex_df['iso_alpha'] == iso_code]
+    if not match.empty:
+        feature['properties']['rgb'] = match.iloc[0]['rgb']
     else:
-        return coords
+        feature['properties']['rgb'] = [200, 200, 200]  # default gray
 
-for country in country_polygons:
-    country["coordinates"] = flatten_coords(country["coordinates"])
-
-# 4️⃣ Prepare PyDeck Layer
-selected_country = st.session_state.get("selected_country", None)
-
-def get_fill_color(country):
-    if selected_country and country["iso"] == selected_country:
-        # Highlighted country in brighter color
-        return [255, 0, 0]
-    return country["color"]
-
-polygon_layer = pdk.Layer(
-    "PolygonLayer",
-    data=country_polygons,
-    get_polygon="coordinates",
-    get_fill_color=get_fill_color,
-    get_line_color=[0,0,0],
+# 4️⃣ Define PyDeck Layer
+geo_layer = pdk.Layer(
+    "GeoJsonLayer",
+    geojson,
+    get_fill_color="properties.rgb",
     pickable=True,
-    auto_highlight=True
+    auto_highlight=True,
+    stroked=True,
+    get_line_color=[255, 255, 255],
+    line_width_min_pixels=1,
 )
 
-# 5️⃣ Deck object
-deck = pdk.Deck(
-    layers=[polygon_layer],
-    initial_view_state=pdk.ViewState(
-        latitude=10,
-        longitude=0,
-        zoom=1.5,
-        pitch=0,
-    ),
-    tooltip={"text": "{name}"},
+# 5️⃣ Set viewport
+view_state = pdk.ViewState(
+    latitude=0,
+    longitude=0,
+    zoom=1.5,
+    pitch=0,
 )
 
-# 6️⃣ Show PyDeck chart and capture click
-event = st.pydeck_chart(deck, use_container_width=True, selection_mode="single-object", on_select="rerun")
+# 6️⃣ Render the map
+r = pdk.Deck(
+    layers=[geo_layer],
+    initial_view_state=view_state,
+    tooltip={"text": "{NAME}"},
+)
 
-if event is not None and len(event.selection) > 0:
-    st.session_state.selected_country = event.selection[0]["object"]["iso"]
-
-# 7️⃣ Sidebar info
-if selected_country:
-    country_name = next(c["name"] for c in country_polygons if c["iso"] == selected_country)
-    st.sidebar.markdown(f"### Selected Country: {country_name}")
+st.pydeck_chart(r)
