@@ -1,116 +1,126 @@
-# app.py
+import json
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from streamlit_plotly_events import plotly_events
-import json
 
-st.set_page_config(layout="wide")
-st.title("🌍 Interactive Global Health & Socio-Economic Dashboard")
-st.write("Click any country on the map to open the detailed popup window.")
+# -------------------------------
+# PAGE CONFIG
+# -------------------------------
+st.set_page_config(
+    page_title="Global Dashboard",
+    layout="wide",
+)
 
-# ---- Load data ----
+# Blur background using CSS
+st.markdown("""
+    <style>
+        .blurred {
+            filter: blur(5px);
+            pointer-events: none;
+        }
+        .popup-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            width: 75%;
+            height: 75%;
+            overflow-y: auto;
+            box-shadow: 0px 0px 40px rgba(0,0,0,0.4);
+            z-index: 9999;
+        }
+        .close-btn {
+            float: right;
+            cursor: pointer;
+            background: #333;
+            color: white;
+            padding: 6px 10px;
+            border-radius: 5px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# -------------------------------
+# LOAD DATASETS
+# -------------------------------
 hex_df = pd.read_csv("Hex.csv")
-hex_df.columns = hex_df.columns.str.strip()
-hex_df['iso_alpha'] = hex_df['iso_alpha'].astype(str).str.upper().str.strip()
-hex_df['country'] = hex_df['country'].astype(str).str.strip()
+hex_df.rename(columns={"iso_alpha": "ISO3"}, inplace=True)
 
-with open("countries.geo.json") as f:
+main_df = pd.read_csv("final_with_socio_cleaned.csv")
+main_df["ISO3"] = main_df["ISO3"].str.upper()
+
+with open("countries.geo.json", "r") as f:
     geojson = json.load(f)
 
-df = pd.read_csv("final_with_socio_cleaned.csv")
-df.columns = df.columns.str.strip()
-df['ISO3'] = df['ISO3'].astype(str).str.upper().str.strip()
+# -------------------------------
+# MERGE HEX COLORS WITH GEOJSON
+# -------------------------------
+id_to_hex = dict(zip(hex_df["ISO3"], hex_df["hex"]))
 
-# ---- Build map ----
+for f in geojson["features"]:
+    iso = f["id"]        # GeoJSON ID = AFG, IND, USA
+    f["properties"]["hex"] = id_to_hex.get(iso, "#CCCCCC")
+
+# -------------------------------
+# BUILD MAP
+# -------------------------------
 fig = px.choropleth(
-    hex_df,
+    main_df[main_df["Year"] == main_df["Year"].max()],
     geojson=geojson,
-    locations='iso_alpha',
-    color='hex',
-    hover_name='country',
-    featureidkey="id",
+    locations="ISO3",
+    color="ISO3",
+    color_discrete_map=id_to_hex,
+    hover_name="Country",
 )
+
 fig.update_geos(fitbounds="locations", visible=False)
-fig.update_layout(margin=dict(r=0, t=0, l=0, b=0), height=600)
 
-# ---- Capture click event (single map) ----
-clicked = plotly_events(fig, click_event=True, hover_event=False)
+click = st.plotly_chart(fig, use_container_width=True)
 
-# Helper to open modal
-def show_modal(country_name, country_data):
-    st.markdown("""
-    <style>
-    .modal-bg { position: fixed; top:0; left:0; width:100%; height:100%; backdrop-filter: blur(5px);
-                background-color: rgba(0,0,0,0.45); z-index: 999; }
-    .modal-box { position: fixed; top:4%; left:6%; width:88%; height:92%; background:white;
-                 padding:18px; border-radius:12px; overflow-y: auto; z-index:1000; }
-    .close-btn { float: right; background:#e74c3c; color:white; padding:6px 10px; border-radius:6px; text-decoration:none; }
-    </style>
-    """, unsafe_allow_html=True)
+# -------------------------------
+# CLICK DETECTION
+# -------------------------------
+clicked_country = None
 
-    st.markdown('<div class="modal-bg"></div><div class="modal-box">', unsafe_allow_html=True)
-    col1, col2 = st.columns([3,1])
-    with col1:
-        st.header(f"{country_name} — Detailed Indicators")
-    with col2:
-        if st.button("Close"):
-            st.experimental_rerun()
+if click and hasattr(click, "selection") and click.selection:
+    try:
+        point = click.selection["points"][0]
+        clicked_country = point.get("location")
+    except:
+        pass
 
-    if country_data.empty:
-        st.warning("No socio-economic data available for this country.")
-    else:
-        # Example charts (add/remove as needed)
-        st.subheader("Trends")
-        st.plotly_chart(px.line(country_data, x="Year", y="GDP_per_capita", title="GDP per Capita"), use_container_width=True)
-        st.plotly_chart(px.line(country_data, x="Year", y="HDI", title="Human Development Index"), use_container_width=True)
-        st.plotly_chart(px.line(country_data, x="Year", y="Life_Expectancy", title="Life Expectancy"), use_container_width=True)
-        st.plotly_chart(px.line(country_data, x="Year", y="Gini_Index", title="Gini Index"), use_container_width=True)
-        st.plotly_chart(px.line(country_data, x="Year", y="PM25", title="Air Pollution (PM2.5)"), use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+# -------------------------------
+# POPUP CONTENT
+# -------------------------------
+if clicked_country:
+    country_data = main_df[main_df["ISO3"] == clicked_country]
 
-# ---- Interpret click payload robustly ----
-if clicked:
-    info = clicked[0]  # dict with event details
-    # try several possible keys
-    iso_clicked = None
-    country_clicked = None
+    st.markdown('<div class="blurred">', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # Common: choropleth returns 'location' (the iso code)
-    if 'location' in info and info['location']:
-        iso_clicked = info['location']
+    st.markdown('<div class="popup-container">', unsafe_allow_html=True)
 
-    # Some Plotly versions return hovertext or text with country name
-    if not iso_clicked:
-        if 'hovertext' in info and info['hovertext']:
-            country_clicked = info['hovertext']
-        elif 'text' in info and info['text']:
-            country_clicked = info['text']
+    st.markdown(
+        f"<div class='close-btn' onclick='window.location.reload()'>X</div>",
+        unsafe_allow_html=True,
+    )
 
-    # customdata sometimes contains arrays you set - try to extract iso if present
-    if not iso_clicked and 'customdata' in info and info['customdata']:
-        # attempt common positions
-        cd = info['customdata']
-        if isinstance(cd, (list, tuple)) and len(cd) > 0:
-            # try to find an entry that looks like ISO3 (3 letters)
-            for entry in cd:
-                if isinstance(entry, str) and len(entry) == 3:
-                    iso_clicked = entry.upper()
-                    break
+    country_name = country_data["Country"].iloc[0]
+    st.markdown(f"## 📊 {country_name} — Overview")
 
-    # Map iso -> country if iso known
-    if iso_clicked:
-        row = hex_df[hex_df['iso_alpha'] == iso_clicked]
-        if not row.empty:
-            country_clicked = row.iloc[0]['country']
-    # If still unknown, show debug info
-    if not country_clicked:
-        st.error("Could not determine clicked country from the event payload. Showing payload keys to help debug.")
-        st.write("Event payload keys:", list(info.keys()))
-        st.write("Full payload (first item):", info)
-    else:
-        iso3 = hex_df.loc[hex_df['country'] == country_clicked, 'iso_alpha'].values[0]
-        country_data = df[df['ISO3'] == iso3].sort_values('Year')
-        show_modal(country_clicked, country_data)
-else:
-    st.info("Click a country on the map to open the detailed popup.")
+    # GDP Chart
+    gdp_fig = px.line(country_data, x="Year", y="GDP_per_capita", title="GDP per Capita")
+    st.plotly_chart(gdp_fig, use_container_width=True)
+
+    # Life Expectancy Chart
+    life_fig = px.line(country_data, x="Year", y="Life_Expectancy", title="Life Expectancy")
+    st.plotly_chart(life_fig, use_container_width=True)
+
+    # HDI Chart
+    hdi_fig = px.line(country_data, x="Year", y="HDI", title="Human Development Index")
+    st.plotly_chart(hdi_fig, use_container_width=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
