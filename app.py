@@ -6,7 +6,7 @@ import plotly.express as px
 from streamlit_plotly_events import plotly_events
 
 # 2️⃣ Load datasets
-hex_df = pd.read_csv("HEX.csv")  # Columns: Country, iso_alpha, hex
+hex_df = pd.read_csv("Hex.csv")  # Columns: Country, iso_alpha, hex
 with open("countries.geo.json") as f:
     geojson = json.load(f)
 
