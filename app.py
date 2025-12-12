@@ -1,57 +1,90 @@
-# 1️⃣ Import libraries
+# app.py
 import streamlit as st
 import pandas as pd
 import json
 import plotly.express as px
 import plotly.graph_objects as go
 
-# 2️⃣ Load datasets
-hex_df = pd.read_csv("Hex.csv")  # your main data
+# -------------------------------
+# 1️⃣ Load CSV and GeoJSON
+# -------------------------------
+hex_df = pd.read_csv("Hex.csv")
+
+# Rename ISO column to match code
+hex_df = hex_df.rename(columns={'ISO3': 'iso_alpha'})
+
+# Clean ISO codes
+hex_df['iso_alpha'] = hex_df['iso_alpha'].str.strip().str.upper()
+
+# Load GeoJSON
 with open("countries.geo.json") as f:
     geojson = json.load(f)
 
-# 3️⃣ Data cleaning
-hex_df = hex_df.dropna(subset=['iso_alpha'])
-hex_df['iso_alpha'] = hex_df['iso_alpha'].astype(str).str.strip()
-hex_df = hex_df.drop_duplicates(subset=['iso_alpha'])
-
-# Optional: create a numeric column for choropleth coloring
-hex_df['Value'] = range(len(hex_df))
-
-# Filter only countries present in GeoJSON
+# Filter CSV for only countries present in GeoJSON
 geo_ids = [feature['id'] for feature in geojson['features']]
 hex_df = hex_df[hex_df['iso_alpha'].isin(geo_ids)]
 
-# 4️⃣ Streamlit UI
-st.title("Interactive Global Map Dashboard")
-st.write("Click on a country to see its indicators.")
+# -------------------------------
+# 2️⃣ Streamlit UI
+# -------------------------------
+st.set_page_config(layout="wide")
+st.title("🌍 Interactive Global Health & Socio-Economic Dashboard")
+st.write("Click on a country to see detailed indicators over time.")
 
-# 5️⃣ Choropleth map
+# -------------------------------
+# 3️⃣ Choropleth Map
+# -------------------------------
+hex_df['Value'] = 1  # dummy value for coloring
+
 fig = px.choropleth(
     hex_df,
     geojson=geojson,
     locations='iso_alpha',
     color='Value',
     hover_name='Country',
-    featureidkey="id",  # matches GeoJSON
+    featureidkey="id",
+    color_continuous_scale="Viridis"
 )
 
 fig.update_geos(fitbounds="locations", visible=False)
 fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
 
-# 6️⃣ Display map
-selected_country = st.plotly_chart(fig, use_container_width=True)
+selected = st.plotly_chart(fig, use_container_width=True)
 
-# 7️⃣ Country selection
-country_list = hex_df['Country'].tolist()
-selected = st.selectbox("Or select a country from dropdown:", country_list)
+# -------------------------------
+# 4️⃣ Country Selection
+# -------------------------------
+country_list = hex_df['Country'].sort_values().tolist()
+selected_country = st.selectbox("Or select a country from the list:", country_list)
 
-if selected:
-    st.subheader(f"Indicators for {selected}")
+country_data = hex_df[hex_df['Country'] == selected_country]
 
-    # Example line chart (replace with your real metrics)
-    country_data = hex_df[hex_df['Country'] == selected]
-    metrics = ['Value']  # Add your actual metric columns here
+if not country_data.empty:
+    st.subheader(f"📊 Indicators for {selected_country}")
 
-    for metric in metrics:
-        st.line_chart(country_data[metric])
+    # -------------------------------
+    # Line charts for multiple indicators
+    # -------------------------------
+    indicators = [
+        'GDP_per_capita', 'Gini_Index', 'Life_Expectancy',
+        'PM25', 'Health_Insurance', 'Median_Age_Est',
+        'COVID_Deaths', 'COVID_Cases', 'Population_Density', 'HDI'
+    ]
+
+    for ind in indicators:
+        if ind in country_data.columns:
+            fig_line = go.Figure()
+            fig_line.add_trace(go.Scatter(
+                x=country_data['Year'],
+                y=country_data[ind],
+                mode='lines+markers',
+                name=ind
+            ))
+            fig_line.update_layout(
+                title=ind,
+                xaxis_title="Year",
+                yaxis_title=ind,
+                height=300,
+                margin={"r":10,"t":30,"l":10,"b":10}
+            )
+            st.plotly_chart(fig_line, use_container_width=True)
