@@ -1,53 +1,53 @@
-# app.py
-
+# 1️⃣ Import libraries
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import json
 
-st.set_page_config(layout="wide")
-st.title("🌍 Interactive World Map — Hover Highlight & Click Zoom")
-
-# --- Load Data ---
-# World GeoJSON
-with open("countries.geo.json", "r") as f:
+# 2️⃣ Load data
+hex_df = pd.read_csv("Hex.csv")  # Columns: country, iso_alpha, hex
+with open("countries.geo.json") as f:
     geojson_data = json.load(f)
 
-# Sample color/hex mapping CSV
-hex_df = pd.read_csv("Hex.csv")  # columns: country, iso_alpha, junk, hex
-hex_df['iso_alpha'] = hex_df['iso_alpha'].str.upper().str.strip()
+# 3️⃣ Merge HEX colors into GeoJSON properties
+for feature in geojson_data['features']:
+    iso = feature['properties']['ISO_A3']
+    color = hex_df.loc[hex_df['iso_alpha'] == iso, 'hex'].values
+    feature['properties']['color'] = color[0] if len(color) > 0 else "#CCCCCC"
 
-# Merge color with geojson
-color_map = dict(zip(hex_df['iso_alpha'], hex_df['hex']))
-
-# --- Create Map ---
+# 4️⃣ Create Plotly choropleth map
 fig = px.choropleth(
-    hex_df,
     geojson=geojson_data,
-    locations='iso_alpha',
-    color='hex',  # Use color as dummy
-    color_discrete_map=color_map,
-    hover_name='country',  # Country name on hover
+    locations=[f['properties']['ISO_A3'] for f in geojson_data['features']],
+    color=[f['properties']['color'] for f in geojson_data['features']],
+    color_discrete_map="identity",  # Use HEX colors directly
 )
 
-fig.update_geos(
-    showcountries=True,
-    showcoastlines=False,
-    showocean=True,
-    oceancolor='lightblue',
-    projection_type='natural earth'
-)
-
-# Remove colorbar, we only use colors as fill
-fig.update_layout(coloraxis_showscale=False)
-
-# --- Hover + Click style ---
+# 5️⃣ Update layout for hover/click effects
 fig.update_traces(
-    marker_line_width=0.5,       # thin border normally
-    marker_line_color='white',
-    hoverinfo="location",        # show country name on hover
-    hoverlabel=dict(bgcolor="yellow", font_size=14, font_family="Arial"),
+    hoverinfo="location",
+    hovertemplate="<b>%{location}</b>",
+    marker_line_width=0.5,  # Default border
+    marker_line_color="black",
 )
 
-# Streamlit chart
+# 6️⃣ Add hover + click "lift" effect
+fig.update_traces(
+    marker=dict(
+        line=dict(width=0.5, color="black")
+    ),
+    selector=dict(type="choropleth")
+)
+
+fig.update_layout(
+    geo=dict(
+        showframe=False,
+        showcoastlines=True,
+        projection_type='natural earth',
+    ),
+    margin={"r":0,"t":0,"l":0,"b":0},
+)
+
+# 7️⃣ Streamlit app
+st.title("Interactive World Map with Hover Effect")
 st.plotly_chart(fig, use_container_width=True)
