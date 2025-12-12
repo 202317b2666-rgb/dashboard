@@ -2,7 +2,6 @@ import json
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import re
 
 st.set_page_config(
@@ -28,17 +27,21 @@ def looks_like_iso3(s):
 def looks_like_hex(s):
     return isinstance(s, str) and bool(re.fullmatch(r"#?[0-9A-Fa-f]{6}", s.strip()))
 
-iso_col = df_hex.columns[1]
-hex_col = df_hex.columns[3]
+# Force 2nd and 4th columns
+iso_col = df_hex.columns[1]     # 2nd column
+hex_col = df_hex.columns[3]     # 4th column
 
+# Add validation flags
 df_hex["ISO_Valid"] = df_hex[iso_col].apply(looks_like_iso3)
 df_hex["HEX_Valid"] = df_hex[hex_col].apply(looks_like_hex)
 
+# Show errors in UI if any
 invalid_rows = df_hex[(df_hex["ISO_Valid"] == False) | (df_hex["HEX_Valid"] == False)]
 if not invalid_rows.empty:
     st.error("Invalid ISO3 or HEX values found in Hex.csv")
     st.dataframe(invalid_rows)
 
+# Clean and standardize
 df_hex["iso3"] = df_hex[iso_col].str.extract(r"([A-Za-z]{3})")[0].str.upper()
 df_hex["hex"] = df_hex[hex_col].apply(
     lambda h: ("#" + h.strip()) if looks_like_hex(h) and not h.startswith("#") else h
@@ -62,37 +65,28 @@ df_countries = pd.DataFrame(rows).drop_duplicates(subset="iso3").reset_index(dro
 # 4. MERGE COUNTRIES WITH HEX COLORS
 # ------------------------------------------------------------
 df = df_countries.merge(df_hex[["iso3", "hex"]], on="iso3", how="left")
-df["hex"] = df["hex"].fillna("#cccccc")
+df["hex"] = df["hex"].fillna("#cccccc")     # default grey
 color_map = {row.iso3: row.hex for row in df.itertuples(index=False)}
 
 # ------------------------------------------------------------
-# 5. LOAD FINAL MERGED DATASET
-# ------------------------------------------------------------
-data = pd.read_csv("final_with_socio_cleaned.csv")
-data['ISO3'] = data['ISO3'].str.upper()
-
-# ------------------------------------------------------------
-# 6. WORLD MAP FUNCTION
+# 5. WORLD MAP FUNCTION
 # ------------------------------------------------------------
 def build_world_map(df):
     fig = px.choropleth(
         df,
-        geojson=world_geojson,
+        geojson=world_geojson, 
         locations="iso3",
         featureidkey="id",
-        color="iso3",
+        color="iso3",                     
         hover_name="country",
         projection="natural earth",
-        color_discrete_map=color_map,
+        color_discrete_map=color_map,     
     )
-
     fig.update_traces(
         marker_line_width=0.8,
         marker_line_color="white",
         hovertemplate="<b>%{hovertext}</b><extra></extra>",
-        hoverlabel=dict(bgcolor="white", font_size=16)
     )
-
     fig.update_layout(
         margin=dict(l=0, r=0, t=0, b=0),
         paper_bgcolor="#b9e6ff",
@@ -107,126 +101,87 @@ def build_world_map(df):
         height=650,
         dragmode=False,
     )
-
     return fig
 
 fig = build_world_map(df)
 
 # ------------------------------------------------------------
-# 7. REMOVE EXTRA PADDING
-# ------------------------------------------------------------
-st.markdown(
-    """
-    <style>
-    .block-container {
-        padding:0rem !important;
-        max-width: 100% !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ------------------------------------------------------------
-# 8. DISPLAY MAP
-# ------------------------------------------------------------
-clicked_iso = st.session_state.get("clicked_iso", "")
-
-def handle_click():
-    st.session_state.clicked_iso = st.session_state.country_select
-
-# Country selector hidden (used for popup trigger)
-st.selectbox(
-    "Select country for popup (hidden, used internally)",
-    [""] + sorted(data['ISO3'].unique()),
-    key="country_select",
-    on_change=handle_click
-)
-
-st.plotly_chart(fig, use_container_width=True)
-
-# ------------------------------------------------------------
-# 9. POPUP OVERLAY CSS
+# 6. REMOVE EXTRA PADDING
 # ------------------------------------------------------------
 st.markdown("""
 <style>
-.popup-overlay {
-    position: fixed;
-    top:0; left:0;
-    width:100%; height:100%;
-    background: rgba(0,0,0,0.85);
-    backdrop-filter: blur(6px);
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    z-index:9999;
-}
-.popup-box {
-    width: 85%;
-    max-height: 90%;
-    overflow-y:auto;
-    background:#1a1a1a;
-    color:white;
-    padding:30px;
-    border-radius:15px;
-}
-.line-chart {
-    margin-top:20px;
-}
-.close-btn {
-    background:#f44336;
-    color:white;
-    border:none;
-    padding:10px 20px;
-    font-size:16px;
-    border-radius:5px;
-    cursor:pointer;
+.block-container {
+    padding: 0rem !important;
+    max-width: 100% !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ------------------------------------------------------------
-# 10. SHOW POPUP IF CLICKED
+# 7. DISPLAY MAP
 # ------------------------------------------------------------
-if clicked_iso:
-    country_data = data[data['ISO3'] == clicked_iso]
-    if not country_data.empty:
-        country_name = country_data['Country'].iloc[0]
-        # Line chart for all metrics
-        metrics = [
-            'GDP_per_capita', 'Gini_Index', 'Life_Expectancy', 'PM25', 
-            'Health_Insurance', 'Median_Age_Est', 'Median_Age_Mid',
-            'COVID_Deaths','COVID_Cases','Population_Density','Total_Population'
-        ]
-        fig_line = go.Figure()
-        for m in metrics:
-            fig_line.add_trace(go.Scatter(
-                x=country_data['Year'], y=country_data[m],
-                mode='lines+markers', name=m
-            ))
-        fig_line.update_layout(
-            template="plotly_dark",
-            height=400, margin=dict(l=20,r=20,t=20,b=20)
-        )
-        
-        st.markdown(f"""
-        <div class="popup-overlay">
-            <div class="popup-box">
-                <h2>{country_name} ({clicked_iso})</h2>
-                <div style="display:flex; gap:20px;">
-                    <div style="flex:1">
-                        <img src="https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips/USA_counties_map.png" width="100%">
-                        <!-- Replace with small map if needed -->
-                    </div>
-                    <div style="flex:2">
-        """, unsafe_allow_html=True)
+st.plotly_chart(fig, use_container_width=True)
 
-        st.plotly_chart(fig_line, use_container_width=True)
+# ------------------------------------------------------------
+# 8. LOAD MAIN DATASET
+# ------------------------------------------------------------
+data = pd.read_csv("final_with_socio_cleaned.csv")
+data.columns = data.columns.str.strip()  # remove extra spaces
+data['ISO3'] = data['ISO3'].str.upper()  # ensure uppercase
 
-        st.markdown("""
-                    </div>
-                </div>
-                <button class="close-btn" onclick="window.location.reload();">Close</button>
+# ------------------------------------------------------------
+# 9. HANDLE COUNTRY CLICK (via selectbox)
+# ------------------------------------------------------------
+if "selected_country" not in st.session_state:
+    st.session_state.selected_country = None
+
+def handle_country_click():
+    st.session_state.selected_country = st.session_state.country_select
+
+st.selectbox(
+    "Select country for popup (hidden, used internally)",
+    [""] + sorted(data['ISO3'].unique()),
+    key="country_select",
+    on_change=handle_country_click
+)
+
+# ------------------------------------------------------------
+# 10. SHOW POPUP WINDOW WITH DETAILS
+# ------------------------------------------------------------
+if st.session_state.selected_country:
+    country_iso = st.session_state.selected_country
+    country_data = data[data["ISO3"] == country_iso].sort_values("Year")
+    
+    # Overlay popup container
+    st.markdown(f"""
+    <div style="
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background-color: rgba(0,0,0,0.7);
+        backdrop-filter: blur(6px);
+        z-index: 9999;
+        display: flex; justify-content: center; align-items: center;
+    ">
+        <div style="
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            width: 90%; max-width: 1000px;
+            height: 80%;
+            overflow: auto;
+            display: flex;
+        ">
+            <div style="flex:1; margin-right:20px;">
+                <h3>{country_data['Country'].iloc[0]}</h3>
+                <!-- Map placeholder, can embed Plotly small map here if needed -->
+            </div>
+            <div style="flex:2;">
+                <!-- Line charts using Streamlit/Plotly -->
+                <p>Indicators & line charts will go here</p>
+            </div>
+            <div style="position:absolute; top:10px; right:20px;">
+                <button onclick="window.location.reload();">Close</button>
             </div>
         </div>
-        """, unsafe_allow_html=True)
+    </div>
+    """, unsafe_allow_html=True)
