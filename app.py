@@ -20,18 +20,18 @@ fig = px.choropleth(
     geojson=geojson_data,
     locations=[f['properties']['ISO_A3'] for f in geojson_data['features']],
     color=[f['properties']['color'] for f in geojson_data['features']],
-    color_discrete_map="identity",  # Use HEX colors directly
+    color_discrete_map="identity",
 )
 
-# 5️⃣ Update layout for hover/click effects
+# 5️⃣ Default layout for borders
 fig.update_traces(
     hoverinfo="location",
     hovertemplate="<b>%{location}</b>",
-    marker_line_width=0.5,  # Default border
+    marker_line_width=0.5,  # default border width
     marker_line_color="black",
 )
 
-# 6️⃣ Add hover + click "lift" effect
+# 6️⃣ Add interactive "pop-out" effect using hover
 fig.update_traces(
     marker=dict(
         line=dict(width=0.5, color="black")
@@ -39,6 +39,23 @@ fig.update_traces(
     selector=dict(type="choropleth")
 )
 
+# Add hover/click visual effect
+fig.update_traces(
+    hoverlabel=dict(
+        bgcolor="white",
+        font_size=14,
+        font_family="Arial"
+    ),
+    selected=dict(
+        marker=dict(line=dict(width=3, color="red")),
+        opacity=1
+    ),
+    unselected=dict(
+        opacity=0.6
+    )
+)
+
+# 7️⃣ Update geo layout
 fig.update_layout(
     geo=dict(
         showframe=False,
@@ -48,6 +65,6 @@ fig.update_layout(
     margin={"r":0,"t":0,"l":0,"b":0},
 )
 
-# 7️⃣ Streamlit app
-st.title("Interactive World Map with Hover Effect")
+# 8️⃣ Streamlit app
+st.title("Interactive World Map with Click Pop-Out Effect")
 st.plotly_chart(fig, use_container_width=True)
