@@ -9,7 +9,7 @@ st.set_page_config(page_title="World Map Clean View", layout="wide")
 st.markdown("<h1 style='text-align:center;'>🌍 Clean World Map View</h1>", unsafe_allow_html=True)
 
 # Load files
-hex_df = pd.read_csv("HEX.csv")
+hex_df = pd.read_csv("Hex.csv")
 with open("countries.geo.json", "r") as f:
     geojson_data = json.load(f)
 
