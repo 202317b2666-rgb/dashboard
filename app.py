@@ -1,53 +1,53 @@
+# app.py
+
 import streamlit as st
 import pandas as pd
-import json
 import plotly.express as px
+import json
 
-st.title("🌍 World Map — Interactive Highlight")
+st.set_page_config(layout="wide")
+st.title("🌍 Interactive World Map — Hover Highlight & Click Zoom")
 
-# Load Hex / map data
-hex_df = pd.read_csv("Hex.csv")  # country, iso_alpha, hex
-with open("countries.geo.json") as f:
-    geojson = json.load(f)
+# --- Load Data ---
+# World GeoJSON
+with open("countries.geo.json", "r") as f:
+    geojson_data = json.load(f)
 
-# Base Choropleth map
+# Sample color/hex mapping CSV
+hex_df = pd.read_csv("Hex.csv")  # columns: country, iso_alpha, junk, hex
+hex_df['iso_alpha'] = hex_df['iso_alpha'].str.upper().str.strip()
+
+# Merge color with geojson
+color_map = dict(zip(hex_df['iso_alpha'], hex_df['hex']))
+
+# --- Create Map ---
 fig = px.choropleth(
     hex_df,
-    geojson=geojson,
-    locations="iso_alpha",
-    color="hex",  # dummy color, just for visualization
-    color_continuous_scale="Blues",
-    hover_name="country",
-    labels={"iso_alpha": "ISO3"},
+    geojson=geojson_data,
+    locations='iso_alpha',
+    color='hex',  # Use color as dummy
+    color_discrete_map=color_map,
+    hover_name='country',  # Country name on hover
 )
 
-# Map styling
 fig.update_geos(
-    visible=False,
     showcountries=True,
-    countrycolor="white",
-    showland=True,
-    landcolor="rgb(28, 107, 160)",  # ocean-blue background
+    showcoastlines=False,
+    showocean=True,
+    oceancolor='lightblue',
+    projection_type='natural earth'
 )
 
-# Hover + click effect
+# Remove colorbar, we only use colors as fill
+fig.update_layout(coloraxis_showscale=False)
+
+# --- Hover + Click style ---
 fig.update_traces(
-    marker_line_width=0.5,
-    marker_line_color="rgb(0,0,0)",
-    hovertemplate="<b>%{hovertext}</b>",  # shows country name only
-    hoverlabel=dict(bgcolor="white", font_size=12),
-    selector=dict(type="choropleth")
+    marker_line_width=0.5,       # thin border normally
+    marker_line_color='white',
+    hoverinfo="location",        # show country name on hover
+    hoverlabel=dict(bgcolor="yellow", font_size=14, font_family="Arial"),
 )
 
-# Optional: simulate pop-out on hover by changing opacity/color
-fig.update_traces(
-    hoverinfo="location+text",
-    marker=dict(line=dict(width=0.5)),
-    selector=dict(type="choropleth")
-)
-
-# Show map in Streamlit
-clicked = st.plotly_chart(fig, use_container_width=True)
-
-# Future: we can add a Streamlit event listener to detect clicks and highlight
-st.info("Hover over a country to highlight. Click effect coming next.")
+# Streamlit chart
+st.plotly_chart(fig, use_container_width=True)
