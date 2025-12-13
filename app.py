@@ -1,16 +1,19 @@
 import pandas as pd
 import plotly.express as px
-from dash import Dash, dcc, html, Input, Output, State, ctx
+from dash import Dash, dcc, html, Input, Output, State
 import dash_bootstrap_components as dbc
-from plotly.subplots import make_subplots
-import plotly.graph_objects as go
 
 # -----------------------------
 # Load data
 # -----------------------------
 df = pd.read_csv("final_with_socio_cleaned.csv")
+hex_df = pd.read_csv("Hex.csv")  # columns: Country/ISO3/hex
+
+# Merge hex colors
+df = df.merge(hex_df[['ISO3', 'hex']], on='ISO3', how='left')
+
 df["Year"] = df["Year"].astype(int)
-years = sorted(df["Year"].unique().tolist())  # convert to python list
+years = sorted(df["Year"].unique().tolist())
 
 # -----------------------------
 # Dash App
@@ -20,6 +23,7 @@ app = Dash(
     external_stylesheets=[dbc.themes.DARKLY],
     suppress_callback_exceptions=True
 )
+
 server = app.server  # REQUIRED for Render
 
 # -----------------------------
@@ -28,6 +32,7 @@ server = app.server  # REQUIRED for Render
 app.layout = dbc.Container(
     fluid=True,
     children=[
+
         html.H2(
             "🌍 Global Health Dashboard",
             style={"textAlign": "center", "margin": "20px"}
@@ -123,7 +128,7 @@ def update_map(year):
     return fig
 
 # -----------------------------
-# Popup Callback with Line Charts
+# Popup Callback
 # -----------------------------
 @app.callback(
     Output("popup-overlay", "style"),
@@ -134,51 +139,58 @@ def update_map(year):
     State("year-slider", "value")
 )
 def show_popup(clickData, close_clicks, year):
-    triggered_id = ctx.triggered_id
 
-    if triggered_id == "close-popup":
+    if close_clicks:
         return {"display": "none"}, "", ""
 
-    if triggered_id != "world-map" or not clickData:
+    if not clickData:
         return {"display": "none"}, "", ""
 
     iso = clickData["points"][0]["location"]
-    country_df = df[df["ISO3"] == iso]
+    row = df[df["ISO3"] == iso]
 
-    if country_df.empty:
+    if row.empty:
         return {"display": "none"}, "", ""
 
-    # Create line charts for selected attributes
-    fig = make_subplots(rows=2, cols=2, subplot_titles=("HDI", "GDP per Capita", "Life Expectancy", "Population Density"))
+    # Selected year data for line charts
+    row_year = row[row["Year"] == year].iloc[0]
 
-    # HDI
-    fig.add_trace(go.Scatter(
-        x=country_df["Year"], y=country_df["HDI"], mode="lines+markers", name="HDI"
-    ), row=1, col=1)
+    # Small country map
+    country_map = px.choropleth(
+        row,
+        locations="ISO3",
+        color="HDI",
+        hover_name="Country",
+        scope="world",
+        color_continuous_scale="Viridis"
+    )
+    country_map.update_geos(fitbounds="locations", visible=False)
+    country_map.update_layout(height=150, margin=dict(l=0, r=0, t=0, b=0))
 
-    # GDP per Capita
-    fig.add_trace(go.Scatter(
-        x=country_df["Year"], y=country_df["GDP_per_capita"], mode="lines+markers", name="GDP per Capita"
-    ), row=1, col=2)
-
-    # Life Expectancy
-    fig.add_trace(go.Scatter(
-        x=country_df["Year"], y=country_df["Life_Expectancy"], mode="lines+markers", name="Life Expectancy"
-    ), row=2, col=1)
-
-    # Population Density
-    fig.add_trace(go.Scatter(
-        x=country_df["Year"], y=country_df["Population_Density"], mode="lines+markers", name="Population Density"
-    ), row=2, col=2)
-
-    fig.update_layout(
-        height=500,
-        width=800,
-        template="plotly_dark",
-        margin=dict(t=50, b=20)
+    # Line charts for key indicators
+    line_df = row.sort_values("Year")
+    line_fig = px.line(
+        line_df,
+        x="Year",
+        y=["HDI", "GDP_per_capita", "Life_Expectancy"],  # key indicators
+        labels={"value": "Value", "variable": "Indicator"},
+        title=f"Trends - {row_year['Country']}"
+    )
+    line_fig.update_layout(
+        plot_bgcolor="black",
+        paper_bgcolor="black",
+        font_color="white",
+        height=250
     )
 
-    return {"display": "block"}, f"{country_df.iloc[0]['Country']} ({year})", dcc.Graph(figure=fig)
+    popup_content = html.Div([
+        html.Div([
+            dcc.Graph(figure=country_map, style={'display':'inline-block', 'width':'25%'}),
+            dcc.Graph(figure=line_fig, style={'display':'inline-block', 'width':'70%'})
+        ])
+    ])
+
+    return {"display": "block"}, f"{row_year['Country']} ({year})", popup_content
 
 # -----------------------------
 # Run
