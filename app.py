@@ -1,11 +1,9 @@
 # app.py
 
-import streamlit as st
-import pandas as pd
+import dash
+from dash import dcc, html, Output, Input, State
 import plotly.express as px
-
-st.set_page_config(layout="wide")
-st.title("Interactive World Map - Click to show floating popup")
+import pandas as pd
 
 # ----------------------------
 # Sample country data
@@ -17,7 +15,7 @@ map_df = pd.DataFrame({
 })
 
 # ----------------------------
-# Plot world map
+# Plotly map figure
 # ----------------------------
 fig = px.scatter_geo(
     map_df,
@@ -25,38 +23,77 @@ fig = px.scatter_geo(
     lon="lon",
     hover_name="country",
     projection="natural earth",
-    title="World Overview Map"
+    title="Interactive World Map"
 )
-st.plotly_chart(fig, use_container_width=True)
+fig.update_traces(marker=dict(size=12, color="blue"))
 
 # ----------------------------
-# Simulate click for now (can replace with actual map click later)
+# Initialize Dash app
 # ----------------------------
-country_selected = st.selectbox("Select country (simulate click)", map_df["country"])
+app = dash.Dash(__name__)
+app.title = "Interactive World Map Dashboard"
 
 # ----------------------------
-# Show floating popup using HTML/CSS
+# Layout
 # ----------------------------
-if st.button(f"Show Popup for {country_selected}"):
-    popup_html = f"""
-    <div id="popup" style="
-        position:fixed;
-        top:50%;
-        left:50%;
-        transform:translate(-50%, -50%);
-        width:500px;
-        height:400px;
-        background-color:white;
-        border:2px solid #000;
-        box-shadow:0 4px 20px rgba(0,0,0,0.3);
-        z-index:999;
-        padding:20px;
-    ">
-        <h2>{country_selected} Details</h2>
-        <p>This is a floating popup window!</p>
-        <p>You can later add charts and indicators here.</p>
-        <button onclick="document.getElementById('popup').style.display='none'" 
-                style="margin-top:20px;padding:5px 10px;">Close</button>
-    </div>
-    """
-    st.components.v1.html(popup_html, height=0)
+app.layout = html.Div([
+    dcc.Graph(id="world-map", figure=fig, style={"height": "70vh"}),
+    
+    # Hidden div for popup
+    html.Div(id="popup-div", style={
+        "display": "none",
+        "position": "fixed",
+        "top": "50%",
+        "left": "50%",
+        "transform": "translate(-50%, -50%)",
+        "width": "500px",
+        "height": "400px",
+        "background-color": "white",
+        "border": "2px solid black",
+        "box-shadow": "0 4px 20px rgba(0,0,0,0.3)",
+        "z-index": "999",
+        "padding": "20px",
+    }, children=[
+        html.H2(id="popup-title", children=""),
+        html.P("This is a floating popup window!"),
+        html.Button("Close", id="close-popup", n_clicks=0)
+    ])
+])
+
+# ----------------------------
+# Callbacks
+# ----------------------------
+@app.callback(
+    Output("popup-div", "style"),
+    Output("popup-title", "children"),
+    Input("world-map", "clickData"),
+    Input("close-popup", "n_clicks"),
+    State("popup-div", "style"),
+    prevent_initial_call=True
+)
+def display_popup(clickData, n_clicks, current_style):
+    ctx = dash.callback_context
+
+    if not ctx.triggered:
+        return current_style, ""
+    
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
+
+    # Close popup
+    if triggered_id == "close-popup":
+        current_style["display"] = "none"
+        return current_style, ""
+    
+    # Show popup for clicked country
+    if clickData:
+        country = clickData["points"][0]["hovertext"]
+        current_style["display"] = "block"
+        return current_style, f"{country} Details"
+
+    return current_style, ""
+
+# ----------------------------
+# Run server
+# ----------------------------
+if __name__ == "__main__":
+    app.run_server(debug=True)
