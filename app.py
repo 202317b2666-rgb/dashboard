@@ -1,140 +1,150 @@
-import dash
-from dash import dcc, html, Output, Input, State
-import plotly.express as px
-import pandas as pd
 import json
+import pandas as pd
+import plotly.express as px
 
-# ----------------------------
-# Load datasets
-# ----------------------------
-socio_df = pd.read_csv("final_with_socio_cleaned.csv")
-hex_df = pd.read_csv("Hex.csv")
+from dash import Dash, dcc, html, Input, Output
+import dash_bootstrap_components as dbc
 
-# Map country name -> color
-country_colors = dict(zip(hex_df["country"], hex_df["hex"]))
+# -------------------- LOAD DATA --------------------
 
-# Load geojson for country shapes
+# Country geojson
 with open("countries.geo.json") as f:
-    countries_geo = json.load(f)
+    geojson = json.load(f)
 
-# ----------------------------
-# Prepare map figure
-# ----------------------------
-fig = px.choropleth(
-    socio_df.groupby("Country").first().reset_index(),  # one row per country
-    geojson=countries_geo,
-    locations="ISO3",       # ISO3 codes must match geojson 'id'
-    color="Country",        # temporary, colors will be replaced manually
+# Colors
+hex_df = pd.read_csv("Hex.csv")
+hex_df["iso_alpha"] = hex_df["iso_alpha"].str.upper()
+country_colors = dict(zip(hex_df["iso_alpha"], hex_df["hex"]))
+
+# Socio economic data
+df = pd.read_csv("final_with_socio_cleaned.csv")
+df["ISO3"] = df["ISO3"].str.upper()
+
+# Use latest year per country for map
+latest_df = df.sort_values("Year").groupby("ISO3").tail(1)
+
+# Assign color
+latest_df["color"] = latest_df["ISO3"].map(country_colors).fillna("#666666")
+
+# -------------------- MAP --------------------
+
+map_fig = px.choropleth(
+    latest_df,
+    geojson=geojson,
+    locations="ISO3",
+    color="ISO3",  # dummy (we override colors)
     hover_name="Country",
-    projection="natural earth",
-    title="Global Health Dashboard",
+    projection="natural earth"
 )
 
-# Update colors using Hex.csv
-for i, c in enumerate(socio_df["Country"].unique()):
-    if c in country_colors:
-        fig.data[0].marker.colors[i] = country_colors[c]
-
-# Geo layout adjustments
-fig.update_geos(
-    visible=False,
-    showcoastlines=True, coastlinecolor="white",
-    showland=True, landcolor="lightgrey",
-    showocean=True, oceancolor="#4DA6FF"
+map_fig.update_traces(
+    marker_line_width=0.5,
+    marker_line_color="black"
 )
 
-fig.update_layout(
-    template="plotly_dark",
-    margin={"r":0,"t":50,"l":0,"b":0}
+# Apply custom colors
+for i, iso in enumerate(latest_df["ISO3"]):
+    map_fig.data[0].z[i] = i
+    map_fig.data[0].colorscale = [
+        [0, latest_df.iloc[i]["color"]],
+        [1, latest_df.iloc[i]["color"]],
+    ]
+
+map_fig.update_layout(
+    paper_bgcolor="#0b3d91",   # sea blue
+    plot_bgcolor="#0b3d91",
+    geo=dict(
+        bgcolor="#0b3d91",
+        showframe=False,
+        showcoastlines=False
+    ),
+    margin=dict(l=0, r=0, t=0, b=0)
 )
 
-# ----------------------------
-# Initialize Dash app
-# ----------------------------
-app = dash.Dash(__name__)
-app.title = "Global Health Dashboard"
+# -------------------- APP --------------------
 
-# ----------------------------
-# Layout
-# ----------------------------
-app.layout = html.Div(style={"background-color":"#111"}, children=[
-    html.H1("Global Health Dashboard", style={"color": "white", "textAlign": "center"}),
-    dcc.Graph(id="world-map", figure=fig, style={"height": "80vh"}),
-    
-    # Floating popup window
-    html.Div(id="popup-div", style={
-        "display": "none",
-        "position": "fixed",
-        "top": "50%",
-        "left": "50%",
-        "transform": "translate(-50%, -50%)",
-        "width": "700px",
-        "height": "500px",
-        "background-color": "#111",  # black background
-        "color": "white",
-        "border": "2px solid white",
-        "box-shadow": "0 4px 20px rgba(0,0,0,0.3)",
-        "z-index": "999",
-        "padding": "20px",
-        "overflow-y": "scroll"
-    }, children=[
-        html.H2(id="popup-title", children=""),
-        html.Div(id="popup-charts"),
-        html.Button("Close", id="close-popup", n_clicks=0, style={
-            "margin-top": "20px", "padding": "5px 10px"
-        })
-    ])
-])
-
-# ----------------------------
-# Callbacks
-# ----------------------------
-@app.callback(
-    Output("popup-div", "style"),
-    Output("popup-title", "children"),
-    Output("popup-charts", "children"),
-    Input("world-map", "clickData"),
-    Input("close-popup", "n_clicks"),
-    State("popup-div", "style"),
-    prevent_initial_call=True
+app = Dash(
+    __name__,
+    external_stylesheets=[dbc.themes.DARKLY]
 )
-def display_popup(clickData, n_clicks, current_style):
-    ctx = dash.callback_context
-    if not ctx.triggered:
-        return current_style, "", ""
-    
-    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
 
-    # Close popup
-    if triggered_id == "close-popup":
-        current_style["display"] = "none"
-        return current_style, "", ""
-    
-    # Show popup for clicked country
-    if clickData:
-        country = clickData["points"][0]["location"]  # ISO3 code from choropleth
-        df = socio_df[socio_df["ISO3"] == country]
-        country_name = df["Country"].iloc[0] if not df.empty else country
-        current_style["display"] = "block"
+server = app.server
 
-        if df.empty:
-            return current_style, f"{country_name} Details", html.P("No data available", style={"color": "white"})
+app.layout = html.Div(
+    style={"backgroundColor": "#000000", "height": "100vh"},
+    children=[
 
-        # Line charts for indicators
-        charts = []
-        for col in ["GDP_per_capita", "HDI", "Life_Expectancy", "PM25"]:
-            if col in df.columns:
-                chart = dcc.Graph(
-                    figure=px.line(df, x="Year", y=col, title=f"{country_name} {col.replace('_',' ')}", template="plotly_dark")
+        html.H2(
+            "🌍 Global Health Dashboard",
+            style={"textAlign": "center", "padding": "10px"}
+        ),
+
+        dcc.Graph(
+            id="world-map",
+            figure=map_fig,
+            style={"height": "90vh"}
+        ),
+
+        dbc.Modal(
+            [
+                dbc.ModalHeader(
+                    dbc.ModalTitle(id="modal-title"),
+                    close_button=True
+                ),
+                dbc.ModalBody(
+                    dcc.Graph(id="line-chart")
                 )
-                charts.append(chart)
+            ],
+            id="country-modal",
+            size="xl",
+            centered=True,
+            is_open=False,
+            backdrop="static"
+        )
+    ]
+)
 
-        return current_style, f"{country_name} Details", html.Div(charts)
+# -------------------- CALLBACK --------------------
 
-    return current_style, "", ""
+@app.callback(
+    Output("country-modal", "is_open"),
+    Output("modal-title", "children"),
+    Output("line-chart", "figure"),
+    Input("world-map", "clickData"),
+    Input("country-modal", "is_open")
+)
+def show_country_details(clickData, is_open):
 
-# ----------------------------
-# Run server
-# ----------------------------
+    if not clickData:
+        return False, "", {}
+
+    iso = clickData["points"][0]["location"]
+    country_df = df[df["ISO3"] == iso]
+
+    if country_df.empty:
+        return False, "", {}
+
+    country_name = country_df["Country"].iloc[0]
+
+    line_fig = px.line(
+        country_df,
+        x="Year",
+        y=["GDP_per_capita", "HDI"],
+        markers=True,
+        template="plotly_dark",
+        title=f"{country_name} – Trends"
+    )
+
+    line_fig.update_layout(
+        paper_bgcolor="#111111",
+        plot_bgcolor="#111111",
+        font_color="white"
+    )
+
+    return True, country_name, line_fig
+
+
+# -------------------- RUN --------------------
+
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run_server(debug=False)
