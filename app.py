@@ -1,141 +1,108 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import json
+import os # Helps with local file paths
 
-# Set full width layout for a better dashboard experience
-st.set_page_config(layout="wide", page_title="Country Zoom Dashboard")
+st.set_page_config(layout="wide", page_title="Country Metrics Dashboard")
+st.title("Interactive World Map with Country Details Popup")
 
-st.title("Interactive World Map: Click to Zoom")
+# --- 1. Load Data ---
 
-# Initialize session state for selected country if not already set
-if 'selected_country_iso' not in st.session_state:
-    st.session_state['selected_country_iso'] = None
-if 'selected_country_name' not in st.session_state:
-    st.session_state['selected_country_name'] = None
-if 'selected_country_value' not in st.session_state:
-    st.session_state['selected_country_value'] = None
-if 'selected_country_img' not in st.session_state:
-    st.session_state['selected_country_img'] = None
-
-
-# Sample data including an extra country for variety
-df = pd.DataFrame({
-    "country": ["India", "United States", "China", "Brazil", "Germany"],
-    "iso": ["IND", "USA", "CHN", "BRA", "DEU"],
-    "value": [10, 25, 18, 5, 12], # Sample metric values
-    "img": [
-        "upload.wikimedia.org",
-        "upload.wikimedia.org",
-        "upload.wikimedia.org",
-        "upload.wikimedia.org",
-        "upload.wikimedia.org"
-    ]
-})
-
-def update_selection(clicked_iso):
-    """Callback function to update all session state variables."""
-    # Retrieve all relevant data for the clicked ISO from the dataframe
-    country_data = df[df['iso'] == clicked_iso].iloc[0] # Added .iloc[0] accessor
+@st.cache_data
+def load_data():
+    """Load and merge all necessary data files."""
     
-    st.session_state['selected_country_iso'] = clicked_iso
-    st.session_state['selected_country_name'] = country_data['country']
-    st.session_state['selected_country_value'] = country_data['value']
-    st.session_state['selected_country_img'] = country_data['img']
+    # Define file paths (adjust if your files are in subdirectories or online URLs)
+    hex_path = "Hex.csv" 
+    metrics_path = "country_metrics.csv"
+    geojson_path = "country.geo.json"
     
-    # Reruns the script to display the new sidebar content
-    # st.rerun() # Removed rerun here, as on_select="rerun" already triggers it.
-
-# --- Main Dashboard Layout ---
-
-# Fixed: Use valid positive ratios for columns (60/40 split)
-col1, col2 = st.columns([0.6, 0.4])
-
-with col1:
-    st.subheader("World Overview Map")
-
-    # Create the main world choropleth map using Plotly
-    fig = px.choropleth(
-        df,
-        locations="iso",
-        color="value",
-        hover_name="country",
-        custom_data=["iso"], # Pass ISO code for identification after click
-        color_continuous_scale="Viridis",
-        title="Global Metrics"
-    )
-
-    fig.update_layout(
-        geo=dict(
-            showframe=False, 
-            showcoastlines=True, 
-            projection_type="equirectangular"
-        ),
-        margin=dict(l=0, r=0, t=30, b=0),
-        height=500
-    )
+    # Load DataFrames
+    df_hex = pd.read_csv(hex_path)
+    df_metrics = pd.read_csv(metrics_path)
     
-    fig.update_traces(
-        # Standard hover template for the world map
-        hovertemplate="<b>%{hovertext}</b><br>Value: %{z}<extra></extra>"
-    )
-
-    # Display the map and capture the click event
-    # `on_select="rerun"` makes the script re-execute instantly upon selection
-    event_data = st.plotly_chart(
-        fig, 
-        use_container_width=True, 
-        on_select="rerun", 
-        selection_mode="points"
-    )
-    
-    # Check if a selection event occurred (user clicked a point/country on the map)
-    if event_data and event_data.get('selection'):
-        # Get the selected points list
-        points_data = event_data['selection']['points']
-        if points_data:
-            # Extract the ISO code from the *first* clicked point's custom data
-            # points_data[0]['customdata'][0] extracts the value correctly
-            clicked_iso = points_data[0]['customdata'][0]
-            # Call the update function to handle state change
-            update_selection(clicked_iso)
-
-with col2:
-    st.subheader("Country Focus View")
-    
-    if st.session_state['selected_country_iso']:
-        # Filter dataframe for the selected country
-        iso = st.session_state['selected_country_iso']
-        name = st.session_state['selected_country_name']
-        value = st.session_state['selected_country_value']
-        img_url = st.session_state['selected_country_img']
-
-        st.markdown(f"### {name}")
-        st.image(img_url, width=100, caption=f"Flag of {name}")
-        st.write(f"**Associated Value:** {value}")
+    # Load GeoJSON data
+    with open(geojson_path, 'r') as f:
+        geojson_data = json.load(f)
         
-        st.markdown("---")
-        
-        # Create a specific, zoomed map for only this country
-        fig_zoom = px.choropleth(
-            df[df['iso'] == iso],
-            locations="iso",
-            color="value",
-            color_continuous_scale="Viridis",
-            title=f"Zoomed view of {name}"
-        )
-        
-        fig_zoom.update_layout(
-            geo=dict(
-                showframe=False,
-                showcoastlines=True,
-                # Automatically zoom to the selected country's bounds
-                scope=iso.lower() 
-            ),
-            margin=dict(l=0, r=0, t=30, b=0),
-            height=450
-        )
-        
-        st.plotly_chart(fig_zoom, use_container_width=True)
+    # Merge dataframes on ISO code/Country name (requires cleaning/standardizing names if needed)
+    # Assuming 'iso_alpha' in Hex.csv corresponds to 'id' in GeoJSON and 'Country' needs mapping if different
+    # For this example, let's merge metrics onto the hex data using 'Country' column (may need careful alignment in real data)
+    merged_df = pd.merge(df_hex, df_metrics, on="Country", how="inner")
+    
+    return merged_df, geojson_data
 
-    else:
-        st.info("Click on a country in the map on the left to display its specific zoomed view and details here.")
+df_merged, world_geojson = load_data()
+
+# Ensure we are using 2021 data for a consistent map view as an example
+df_display = df_merged[df_merged['Year'] == 2021]
+
+# --- 2. Define the Popup (Dialog) Function ---
+
+@st.dialog("Country Details", width="small")
+def show_details_dialog(country_name, data_row):
+    st.markdown(f"## {country_name}")
+    
+    # Display the flag (assuming an 'img' column or similar URL can be added to the DF)
+    # Since your provided CSVs don't have an 'img' URL, we'll skip the flag image for now.
+
+    st.markdown("**Key Metrics (2021 Data):**")
+    st.markdown(f"* **GDP (per capita):** ${data_row['GDP'].iloc[0]:,.0f}")
+    st.markdown(f"* **HDI:** {data_row['HDI'].iloc[0]:.2f}")
+    st.markdown(f"* **Life Expectancy:** {data_row['LifeExpectancy'].iloc[0]} years")
+    st.markdown(f"* **Population Density:** {data_row['PopulationDensity'].iloc[0]} per sq km")
+    st.markdown(f"* **COVID Deaths/Million:** {data_row['COVIDDeathsPerMillion'].iloc[0]:,.0f}")
+
+    if st.button("Close"):
+        st.session_state['selected_country_iso'] = None # Clear selection on close
+        st.rerun() # Closes the dialog by rerunning the main script
+
+# --- 3. Main Dashboard Layout and Map ---
+
+st.subheader("Global GDP Distribution (2021)")
+
+# Create the main world map
+fig = px.choropleth(
+    df_display,
+    geojson=world_geojson,
+    locations="iso_alpha",  # Match the ID field in the GeoJSON file
+    color="GDP",            # Color the map by GDP
+    hover_name="Country",
+    custom_data=["iso_alpha"],
+    color_continuous_scale="Plasma",
+    scope="world",
+    height=600
+)
+
+fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
+
+# Display the map and capture the click event using `on_select`
+event_data = st.plotly_chart(
+    fig, 
+    use_container_width=True, 
+    on_select="rerun", 
+    selection_mode="points" # Captures the specific country clicked
+)
+
+# --- 4. Handle Click Event and Show Dialog ---
+
+# Check if a selection event occurred
+if event_data and event_data.get('selection'):
+    points_data = event_data['selection']['points']
+    if points_data:
+        # Get the ISO code from the *first* clicked point
+        clicked_iso = points_data[0]['customdata'][0]
+        
+        # Filter the full dataframe (not just the display one) for the clicked country
+        # This makes sure we have all metrics for that specific country across all years if needed
+        country_data_filtered = df_merged[df_merged['iso_alpha'] == clicked_iso]
+
+        # Use the st.dialog function to open the modal window with the data
+        if not country_data_filtered.empty:
+            country_name = country_data_filtered.iloc[0]['Country']
+            # Pass the filtered data row to the dialog function
+            show_details_dialog(country_name, country_data_filtered)
+        else:
+            st.warning("Data not found for the selected country.")
+
