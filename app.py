@@ -8,10 +8,9 @@ import dash_bootstrap_components as dbc
 # -----------------------------
 df = pd.read_csv("final_with_socio_cleaned.csv")
 
-# Ensure correct types
 df["Year"] = df["Year"].astype(int)
 
-years = sorted(df["Year"].unique())
+years = sorted(df["Year"].unique().tolist())  # 👈 convert to python list
 
 # -----------------------------
 # Dash App
@@ -22,7 +21,7 @@ app = Dash(
     suppress_callback_exceptions=True
 )
 
-server = app.server  # IMPORTANT for Render
+server = app.server  # REQUIRED for Render
 
 # -----------------------------
 # Layout
@@ -41,11 +40,11 @@ app.layout = dbc.Container(
             html.Label("Select Year"),
             dcc.Slider(
                 id="year-slider",
-                min=min(years),
-                max=max(years),
-                value=max(years),
+                min=int(min(years)),
+                max=int(max(years)),
+                value=int(max(years)),
                 step=1,
-                marks={y: str(y) for y in years if y % 5 == 0}
+                marks={int(y): str(y) for y in years if y % 5 == 0}  # ✅ FIX
             )
         ], style={"margin": "20px"}),
 
@@ -55,7 +54,7 @@ app.layout = dbc.Container(
             style={"height": "75vh"}
         ),
 
-        # ---- Floating Popup Overlay ----
+        # ---- Floating Popup ----
         html.Div(
             id="popup-overlay",
             style={
@@ -65,7 +64,7 @@ app.layout = dbc.Container(
                 "left": "0",
                 "width": "100%",
                 "height": "100%",
-                "backgroundColor": "rgba(0,0,0,0.7)",
+                "backgroundColor": "rgba(0,0,0,0.75)",
                 "zIndex": "999"
             },
             children=[
@@ -86,11 +85,7 @@ app.layout = dbc.Container(
                         html.Hr(),
                         html.Div(id="popup-content"),
                         html.Br(),
-                        dbc.Button(
-                            "Close",
-                            id="close-popup",
-                            color="danger"
-                        )
+                        dbc.Button("Close", id="close-popup", color="danger")
                     ]
                 )
             ]
@@ -99,7 +94,7 @@ app.layout = dbc.Container(
 )
 
 # -----------------------------
-# Update Map by Year
+# Map Callback
 # -----------------------------
 @app.callback(
     Output("world-map", "figure"),
@@ -121,7 +116,6 @@ def update_map(year):
         geo=dict(
             showframe=False,
             showcoastlines=False,
-            projection_type="natural earth",
             bgcolor="black"
         ),
         paper_bgcolor="black",
@@ -131,10 +125,10 @@ def update_map(year):
     return fig
 
 # -----------------------------
-# Show Popup on Country Click
+# Popup Callback
 # -----------------------------
 @app.callback(
-    Output("popup-overlay", "display"),
+    Output("popup-overlay", "style"),
     Output("popup-title", "children"),
     Output("popup-content", "children"),
     Input("world-map", "clickData"),
@@ -143,18 +137,17 @@ def update_map(year):
 )
 def show_popup(clickData, close_clicks, year):
 
-    # Close popup
     if close_clicks:
-        return "none", "", ""
+        return {"display": "none"}, "", ""
 
     if not clickData:
-        return "none", "", ""
+        return {"display": "none"}, "", ""
 
     iso = clickData["points"][0]["location"]
     row = df[(df["ISO3"] == iso) & (df["Year"] == year)]
 
     if row.empty:
-        return "none", "", ""
+        return {"display": "none"}, "", ""
 
     r = row.iloc[0]
 
@@ -168,11 +161,11 @@ def show_popup(clickData, close_clicks, year):
         html.P(f"Population Density: {r['Population_Density']}")
     ])
 
-    return "block", f"{r['Country']} ({year})", content
+    return {"display": "block"}, f"{r['Country']} ({year})", content
 
 
 # -----------------------------
-# Run App
+# Run
 # -----------------------------
 if __name__ == "__main__":
     app.run_server(debug=True)
