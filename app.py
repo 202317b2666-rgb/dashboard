@@ -1,11 +1,21 @@
 import dash
-from dash import dcc, html, Input, Output, State
-import dash_bootstrap_components as dbc
+from dash import dcc, html, Output, Input, State
 import plotly.express as px
 import pandas as pd
 
 # ----------------------------
-# Sample map data
+# Load country colors (Hex.csv)
+# ----------------------------
+# Sample Hex.csv structure:
+# country,iso_alpha,hex
+# India,IND,#FF5733
+# USA,USA,#33FF57
+# China,CHN,#3357FF
+hex_df = pd.read_csv("Hex.csv")
+
+# ----------------------------
+# Sample map data (latitude, longitude)
+# Replace with actual coordinates for all countries later
 # ----------------------------
 map_df = pd.DataFrame({
     "lat": [21, 37, 35],
@@ -13,88 +23,148 @@ map_df = pd.DataFrame({
     "country": ["India", "USA", "China"]
 })
 
-# Sample indicator data (can replace later)
+# Merge hex colors with map_df
+map_df = map_df.merge(hex_df, left_on="country", right_on="country", how="left")
+
+# ----------------------------
+# Sample indicator data
+# Replace/add actual indicators as needed
+# ----------------------------
 indicator_data = {
-    "India": pd.DataFrame({"Year":[2018,2019,2020,2021,2022], "GDP":[2.5,2.7,2.6,3.0,3.2], "HDI":[0.64,0.65,0.65,0.66,0.67]}),
-    "USA": pd.DataFrame({"Year":[2018,2019,2020,2021,2022], "GDP":[20.5,21,20.8,22,23], "HDI":[0.92,0.92,0.92,0.93,0.93]}),
-    "China": pd.DataFrame({"Year":[2018,2019,2020,2021,2022], "GDP":[13.5,14,14.2,15,16], "HDI":[0.75,0.76,0.76,0.77,0.78]})
+    "India": pd.DataFrame({
+        "Year": [2018, 2019, 2020, 2021, 2022],
+        "GDP": [2.5, 2.7, 2.6, 3.0, 3.2],
+        "HDI": [0.64, 0.65, 0.65, 0.66, 0.67]
+    }),
+    "USA": pd.DataFrame({
+        "Year": [2018, 2019, 2020, 2021, 2022],
+        "GDP": [20.5, 21.0, 20.8, 22.0, 23.0],
+        "HDI": [0.92, 0.92, 0.92, 0.93, 0.93]
+    }),
+    "China": pd.DataFrame({
+        "Year": [2018, 2019, 2020, 2021, 2022],
+        "GDP": [13.5, 14.0, 14.2, 15.0, 16.0],
+        "HDI": [0.75, 0.76, 0.76, 0.77, 0.78]
+    })
 }
 
 # ----------------------------
-# Load Hex.csv for country colors
+# Plotly map figure
 # ----------------------------
-hex_df = pd.DataFrame({
-    "country": ["India","USA","China"],
-    "hex": ["#FF5733", "#33FF57", "#3357FF"]
-})
-# You can replace the above with: hex_df = pd.read_csv("Hex.csv")
+fig = px.scatter_geo(
+    map_df,
+    lat="lat",
+    lon="lon",
+    hover_name="country",
+    projection="natural earth",
+    title="Interactive World Map"
+)
 
-# ----------------------------
-# Map figure with Hex colors + blue sea
-# ----------------------------
-fig = px.scatter_geo(map_df, lat="lat", lon="lon", hover_name="country", projection="natural earth")
-fig.update_traces(marker=dict(size=12, color=map_df["country"].map(dict(zip(hex_df["country"], hex_df["hex"])))))
+# Use Hex colors for countries
+fig.update_traces(marker=dict(size=12, color=map_df["hex"]))
+
+# Blue sea and land color fallback
+fig.update_geos(
+    showcoastlines=True, coastlinecolor="white",
+    showland=True, landcolor="lightgrey",
+    showocean=True, oceancolor="#4DA6FF"
+)
+
 fig.update_layout(
-    geo=dict(
-        showcoastlines=True, coastlinecolor="white",
-        showland=True, landcolor="lightgray",  # base land color
-        showocean=True, oceancolor="#4DA6FF",  # blue sea
-        lakecolor="#4DA6FF"
-    ),
-    clickmode='event+select',
-    paper_bgcolor="#1e1e1e",
-    plot_bgcolor="#1e1e1e",
-    font=dict(color="white")
+    paper_bgcolor="#0c0c0c",
+    plot_bgcolor="#0c0c0c",
+    font_color="white",
+    margin={"r":0,"t":30,"l":0,"b":0}
 )
 
 # ----------------------------
-# Dash app with Bootstrap
+# Initialize Dash app
 # ----------------------------
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = dash.Dash(__name__)
+app.title = "Global Health Dashboard"
 
-app.layout = html.Div([
-    dcc.Graph(id="world-map", figure=fig, style={"height": "70vh"}),
-
-    # Modal popup
-    dbc.Modal([
-        dbc.ModalHeader(dbc.ModalTitle(id="modal-title"), style={"background-color":"#111111", "color":"white"}),
-        dbc.ModalBody(id="modal-body", style={"background-color":"#111111", "color":"white"}),
-        dbc.ModalFooter(dbc.Button("Close", id="close-modal", className="ms-auto", n_clicks=0))
-    ], id="modal", is_open=False, size="lg")
+# ----------------------------
+# Layout
+# ----------------------------
+app.layout = html.Div(style={"backgroundColor": "#0c0c0c", "height": "100vh", "padding": "20px"}, children=[
+    html.H1("Global Health Dashboard", style={"color": "white", "textAlign": "center"}),
+    
+    dcc.Graph(id="world-map", figure=fig, style={"height": "75vh", "margin-top": "20px"}),
+    
+    # Hidden popup
+    html.Div(id="popup-div", style={
+        "display": "none",
+        "position": "fixed",
+        "top": "50%",
+        "left": "50%",
+        "transform": "translate(-50%, -50%)",
+        "width": "600px",
+        "height": "500px",
+        "background-color": "#111111",  # dark popup
+        "color": "white",
+        "border": "2px solid #444",
+        "box-shadow": "0 4px 20px rgba(0,0,0,0.7)",
+        "z-index": "999",
+        "padding": "20px",
+        "overflow-y": "scroll"
+    }, children=[
+        html.H2(id="popup-title", children=""),
+        html.Div(id="popup-charts"),
+        html.Button("Close", id="close-popup", n_clicks=0,
+                    style={"margin-top": "20px", "padding": "5px 10px"})
+    ])
 ])
 
 # ----------------------------
-# Callback for modal popup
+# Callbacks
 # ----------------------------
 @app.callback(
-    Output("modal", "is_open"),
-    Output("modal-title", "children"),
-    Output("modal-body", "children"),
+    Output("popup-div", "style"),
+    Output("popup-title", "children"),
+    Output("popup-charts", "children"),
     Input("world-map", "clickData"),
-    Input("close-modal", "n_clicks"),
-    State("modal", "is_open")
+    Input("close-popup", "n_clicks"),
+    State("popup-div", "style"),
+    prevent_initial_call=True
 )
-def toggle_modal(clickData, n_close, is_open):
+def display_popup(clickData, n_clicks, current_style):
     ctx = dash.callback_context
     if not ctx.triggered:
-        return is_open, "", ""
+        return current_style, "", ""
+    
+    triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
 
-    triggered = ctx.triggered[0]['prop_id'].split('.')[0]
-
-    if triggered == "close-modal" and is_open:
-        return False, "", ""
-    elif triggered == "world-map" and clickData:
+    # Close popup
+    if triggered_id == "close-popup":
+        current_style["display"] = "none"
+        return current_style, "", ""
+    
+    # Show popup for clicked country
+    if clickData:
         country = clickData["points"][0]["hovertext"]
+        current_style["display"] = "block"
+
+        # Get indicator data
         df = indicator_data.get(country)
         if df is None:
-            return True, f"{country} Details", html.P("No data available", style={"color":"white"})
+            return current_style, f"{country} Details", html.P("No data available")
         
-        # Line charts for GDP + HDI
-        gdp_chart = dcc.Graph(figure=px.line(df, x="Year", y="GDP", title=f"{country} GDP").update_layout(paper_bgcolor="#111111", plot_bgcolor="#111111", font=dict(color="white")))
-        hdi_chart = dcc.Graph(figure=px.line(df, x="Year", y="HDI", title=f"{country} HDI").update_layout(paper_bgcolor="#111111", plot_bgcolor="#111111", font=dict(color="white")))
+        # Create charts
+        gdp_chart = dcc.Graph(
+            figure=px.line(df, x="Year", y="GDP", title=f"{country} GDP Trend", template="plotly_dark")
+        )
+        hdi_chart = dcc.Graph(
+            figure=px.line(df, x="Year", y="HDI", title=f"{country} HDI Trend", template="plotly_dark")
+        )
 
-        return True, f"{country} Details", html.Div([gdp_chart, hdi_chart])
-    return is_open, "", ""
+        charts = html.Div([gdp_chart, hdi_chart])
 
+        return current_style, f"{country} Details", charts
+
+    return current_style, "", ""
+
+# ----------------------------
+# Run server
+# ----------------------------
 if __name__ == "__main__":
     app.run_server(debug=True)
