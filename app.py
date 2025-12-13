@@ -1,28 +1,26 @@
 import streamlit as st
-import pandas as pd
-import plotly.express as px
 
-st.set_page_config(layout="wide")
-st.title("Interactive World Map - Click to show popup")
+st.title("Interactive World Map - Click Popup")
 
-# Sample country data
-map_df = pd.DataFrame({
-    "lat": [21, 37, 35],
-    "lon": [78, -95, 103],
-    "country": ["India", "USA", "China"]
-})
+country_selected = st.selectbox("Simulate click country", ["India", "USA", "China"])
 
-# Plotly scatter geo map
-fig = px.scatter_geo(map_df, lat="lat", lon="lon", hover_name="country", projection="natural earth")
-
-# Render the map ONLY ONCE
-st.plotly_chart(fig, use_container_width=True)
-
-# Temporary workaround: simulate click with selectbox
-country_selected = st.selectbox("Simulate click country", map_df["country"])
-
-# Button triggers popup modal
 if st.button(f"Show Popup for {country_selected}"):
-    with st.modal(f"{country_selected} Popup"):
-        st.write("This is your floating popup!")
-        st.write("You can later add charts/indicators here.")
+    st.components.v1.html(f"""
+    <div style="
+        position:fixed;
+        top:50%;
+        left:50%;
+        transform:translate(-50%, -50%);
+        width:400px;
+        height:300px;
+        background-color:white;
+        border:2px solid #000;
+        box-shadow:0 4px 20px rgba(0,0,0,0.3);
+        z-index:999;
+        padding:20px;
+    ">
+        <h3>{country_selected} Details</h3>
+        <p>This is a floating popup window!</p>
+        <p>You can later add charts and indicators here.</p>
+    </div>
+    """, height=0)
