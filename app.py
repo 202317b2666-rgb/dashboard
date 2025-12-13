@@ -2,7 +2,6 @@ import pandas as pd
 import plotly.express as px
 from dash import Dash, dcc, html, Input, Output, State, ctx
 import dash_bootstrap_components as dbc
-from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
 # -----------------------------
@@ -10,7 +9,7 @@ import plotly.graph_objects as go
 # -----------------------------
 df = pd.read_csv("final_with_socio_cleaned.csv")
 df["Year"] = df["Year"].astype(int)
-years = sorted(df["Year"].unique().tolist())  # convert to python list
+years = sorted(df["Year"].unique().tolist())
 
 # -----------------------------
 # Dash App
@@ -73,20 +72,30 @@ app.layout = dbc.Container(
                         "top": "50%",
                         "left": "50%",
                         "transform": "translate(-50%, -50%)",
-                        "width": "80%",
+                        "width": "85%",
                         "maxHeight": "90%",
-                        "overflowY": "auto",
                         "backgroundColor": "#111",
                         "padding": "25px",
                         "borderRadius": "10px",
-                        "color": "white"
+                        "color": "white",
+                        "display": "flex",
+                        "flexDirection": "column"
                     },
                     children=[
                         html.H4(id="popup-title"),
                         html.Hr(),
-                        html.Div(id="popup-content"),
+                        html.Div(
+                            id="popup-content",
+                            style={
+                                "overflowY": "auto",
+                                "maxHeight": "75vh",
+                                "display": "grid",
+                                "gridTemplateColumns": "1fr 1fr",
+                                "gap": "20px"
+                            }
+                        ),
                         html.Br(),
-                        dbc.Button("Close", id="close-popup", color="danger")
+                        dbc.Button("Close", id="close-popup", color="danger", style={"alignSelf": "center"})
                     ]
                 )
             ]
@@ -126,7 +135,7 @@ def update_map(year):
     return fig
 
 # -----------------------------
-# Popup Callback with separate line charts
+# Popup Callback with Individual Charts
 # -----------------------------
 @app.callback(
     Output("popup-overlay", "style"),
@@ -151,29 +160,37 @@ def show_popup(clickData, close_clicks, year):
     if country_df.empty:
         return {"display": "none"}, "", ""
 
-    # Create separate line charts for each indicator
-    charts = []
+    # List of important indicators
     indicators = {
         "HDI": "HDI",
         "GDP per Capita": "GDP_per_capita",
         "Life Expectancy": "Life_Expectancy",
-        "Population Density": "Population_Density",
         "Median Age": "Median_Age_Est",
         "Gini Index": "Gini_Index",
-        "COVID Deaths / mil": "COVID_Deaths"
+        "COVID Deaths / mil": "COVID_Deaths",
+        "Population Density": "Population_Density"
     }
 
-    for name, col in indicators.items():
-        fig = px.line(
-            country_df, x="Year", y=col, markers=True, title=name, template="plotly_dark"
-        )
-        fig.update_layout(
-            height=300, margin=dict(t=30, b=20, l=40, r=20),
-            xaxis=dict(dtick=5)  # ensures year ticks are visible
-        )
-        charts.append(dcc.Graph(figure=fig))
+    chart_list = []
 
-    return {"display": "block"}, f"{country_df.iloc[0]['Country']} ({year})", charts
+    for title, col in indicators.items():
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=country_df["Year"],
+            y=country_df[col],
+            mode="lines+markers",
+            name=title
+        ))
+        fig.update_layout(
+            title=title,
+            template="plotly_dark",
+            height=300,
+            margin=dict(t=30, b=20),
+            xaxis=dict(title="Year", tickangle=-45, nticks=10)
+        )
+        chart_list.append(dcc.Graph(figure=fig))
+
+    return {"display": "block"}, f"{country_df.iloc[0]['Country']} ({year})", chart_list
 
 # -----------------------------
 # Run
