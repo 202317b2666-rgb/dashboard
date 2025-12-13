@@ -22,7 +22,7 @@ if 'selected_country_img' not in st.session_state:
 df = pd.DataFrame({
     "country": ["India", "United States", "China", "Brazil", "Germany"],
     "iso": ["IND", "USA", "CHN", "BRA", "DEU"],
-    "value": [10, 25, 45, 15, 30], # Sample metric values
+    "value": [10, 25, 18, 5, 12], # Sample metric values
     "img": [
         "upload.wikimedia.org",
         "upload.wikimedia.org",
@@ -35,7 +35,7 @@ df = pd.DataFrame({
 def update_selection(clicked_iso):
     """Callback function to update all session state variables."""
     # Retrieve all relevant data for the clicked ISO from the dataframe
-    country_data = df[df['iso'] == clicked_iso].iloc[0]
+    country_data = df[df['iso'] == clicked_iso].iloc[0] # Added .iloc[0] accessor
     
     st.session_state['selected_country_iso'] = clicked_iso
     st.session_state['selected_country_name'] = country_data['country']
@@ -43,12 +43,12 @@ def update_selection(clicked_iso):
     st.session_state['selected_country_img'] = country_data['img']
     
     # Reruns the script to display the new sidebar content
-    st.rerun() 
+    # st.rerun() # Removed rerun here, as on_select="rerun" already triggers it.
 
 # --- Main Dashboard Layout ---
 
-# The map takes up slightly more space (e.g., 60% of width)
-col1, col2 = st.columns([0, 1])
+# Fixed: Use valid positive ratios for columns (60/40 split)
+col1, col2 = st.columns([0.6, 0.4])
 
 with col1:
     st.subheader("World Overview Map")
@@ -94,6 +94,7 @@ with col1:
         points_data = event_data['selection']['points']
         if points_data:
             # Extract the ISO code from the *first* clicked point's custom data
+            # points_data[0]['customdata'][0] extracts the value correctly
             clicked_iso = points_data[0]['customdata'][0]
             # Call the update function to handle state change
             update_selection(clicked_iso)
@@ -138,4 +139,3 @@ with col2:
 
     else:
         st.info("Click on a country in the map on the left to display its specific zoomed view and details here.")
-
