@@ -3,28 +3,28 @@ import plotly.express as px
 from dash import Dash, dcc, html, Input, Output, State
 import dash_bootstrap_components as dbc
 
-# =============================
-# Load Data
-# =============================
+# -----------------------------
+# Load data
+# -----------------------------
 df = pd.read_csv("final_with_socio_cleaned.csv")
 
 df["Year"] = df["Year"].astype(int)
-years = sorted(df["Year"].unique().tolist())
+years = sorted(df["Year"].unique().tolist())  # ✅ convert to Python list
 
-# =============================
+# -----------------------------
 # Dash App
-# =============================
+# -----------------------------
 app = Dash(
     __name__,
     external_stylesheets=[dbc.themes.DARKLY],
     suppress_callback_exceptions=True
 )
 
-server = app.server  # REQUIRED FOR RENDER
+server = app.server  # REQUIRED for Render
 
-# =============================
+# -----------------------------
 # Layout
-# =============================
+# -----------------------------
 app.layout = dbc.Container(
     fluid=True,
     children=[
@@ -34,29 +34,26 @@ app.layout = dbc.Container(
             style={"textAlign": "center", "margin": "20px"}
         ),
 
-        # -------- Year Slider --------
-        html.Div(
-            [
-                html.Label("Select Year"),
-                dcc.Slider(
-                    id="year-slider",
-                    min=int(min(years)),
-                    max=int(max(years)),
-                    value=int(max(years)),
-                    step=1,
-                    marks={int(y): str(y) for y in years if y % 5 == 0}
-                )
-            ],
-            style={"margin": "20px"}
-        ),
+        # ---- Year Slider ----
+        html.Div([
+            html.Label("Select Year"),
+            dcc.Slider(
+                id="year-slider",
+                min=int(min(years)),
+                max=int(max(years)),
+                value=int(max(years)),
+                step=1,
+                marks={int(y): str(y) for y in years if y % 5 == 0}  # ✅ FIX
+            )
+        ], style={"margin": "20px"}),
 
-        # -------- World Map --------
+        # ---- World Map ----
         dcc.Graph(
             id="world-map",
             style={"height": "75vh"}
         ),
 
-        # -------- Floating Popup --------
+        # ---- Floating Popup ----
         html.Div(
             id="popup-overlay",
             style={
@@ -95,9 +92,9 @@ app.layout = dbc.Container(
     ]
 )
 
-# =============================
+# -----------------------------
 # Map Callback
-# =============================
+# -----------------------------
 @app.callback(
     Output("world-map", "figure"),
     Input("year-slider", "value")
@@ -126,9 +123,9 @@ def update_map(year):
 
     return fig
 
-# =============================
+# -----------------------------
 # Popup Callback
-# =============================
+# -----------------------------
 @app.callback(
     Output("popup-overlay", "style"),
     Output("popup-title", "children"),
@@ -165,8 +162,9 @@ def show_popup(clickData, close_clicks, year):
 
     return {"display": "block"}, f"{r['Country']} ({year})", content
 
-# =============================
+
+# -----------------------------
 # Run App
-# =============================
+# -----------------------------
 if __name__ == "__main__":
     app.run_server(host="0.0.0.0", port=8050)
