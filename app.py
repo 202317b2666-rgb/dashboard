@@ -2,41 +2,34 @@ import dash
 from dash import dcc, html, Output, Input, State
 import plotly.express as px
 import pandas as pd
-import json
 
 # ----------------------------
-# Load Hex colors
+# Load datasets
 # ----------------------------
-hex_df = pd.read_csv("Hex.csv")  # country, iso_alpha, hex
-hex_df = hex_df.set_index("iso_alpha")
+socio_df = pd.read_csv("final_socio_cleaned.csv")
+hex_df = pd.read_csv("Hex.csv")
+
+# Merge colors
+country_colors = dict(zip(hex_df["country"], hex_df["hex"]))
 
 # ----------------------------
-# Load full socio-economic data
+# Prepare map figure
 # ----------------------------
-socio_df = pd.read_csv("final_with_socio_cleaned.csv")
-# Expected columns: Location, ISO3_code, Year, GDP, HDI, LifeExpectancy, etc.
+map_df = socio_df.groupby("Country").first().reset_index()  # one row per country
 
-# Convert to dictionary keyed by country
-indicator_data = {}
-for country, df in socio_df.groupby("Location"):
-    indicator_data[country] = df.sort_values("Year")
-
-# ----------------------------
-# Load GeoJSON
-# ----------------------------
-with open("countries.geo.json") as f:
-    geojson = json.load(f)
-
-# ----------------------------
-# Choropleth map
-# ----------------------------
-fig = px.choropleth(
-    locations=hex_df.index,
-    geojson=geojson,
-    color=hex_df["hex"],
-    hover_name=hex_df["country"],
-    projection="natural earth"
+fig = px.scatter_geo(
+    map_df,
+    lat=[0]*len(map_df),  # placeholder lat
+    lon=[0]*len(map_df),  # placeholder lon
+    hover_name="Country",
+    projection="natural earth",
+    title="Global Health Dashboard"
 )
+
+# Assign country colors if exists in Hex.csv
+fig.update_traces(marker=dict(size=12, color=[
+    country_colors.get(c, "blue") for c in map_df["Country"]
+]))
 
 fig.update_geos(
     showcoastlines=True, coastlinecolor="white",
@@ -44,49 +37,46 @@ fig.update_geos(
     showocean=True, oceancolor="#4DA6FF"
 )
 
-fig.update_layout(
-    paper_bgcolor="#0c0c0c",
-    plot_bgcolor="#0c0c0c",
-    font_color="white",
-    margin={"r":0,"t":30,"l":0,"b":0}
-)
-
 # ----------------------------
-# Dash App
+# Initialize Dash app
 # ----------------------------
 app = dash.Dash(__name__)
 app.title = "Global Health Dashboard"
 
-app.layout = html.Div(style={"backgroundColor": "#0c0c0c", "height": "100vh", "padding": "20px"}, children=[
+# ----------------------------
+# Layout
+# ----------------------------
+app.layout = html.Div([
     html.H1("Global Health Dashboard", style={"color": "white", "textAlign": "center"}),
-
-    dcc.Graph(id="world-map", figure=fig, style={"height": "75vh", "margin-top": "20px"}),
-
+    dcc.Graph(id="world-map", figure=fig, style={"height": "70vh"}),
+    
+    # Floating popup window
     html.Div(id="popup-div", style={
         "display": "none",
         "position": "fixed",
         "top": "50%",
         "left": "50%",
         "transform": "translate(-50%, -50%)",
-        "width": "600px",
+        "width": "700px",
         "height": "500px",
-        "background-color": "#111111",
+        "background-color": "#111",  # black background
         "color": "white",
-        "border": "2px solid #444",
-        "box-shadow": "0 4px 20px rgba(0,0,0,0.7)",
+        "border": "2px solid white",
+        "box-shadow": "0 4px 20px rgba(0,0,0,0.3)",
         "z-index": "999",
         "padding": "20px",
         "overflow-y": "scroll"
     }, children=[
         html.H2(id="popup-title", children=""),
         html.Div(id="popup-charts"),
-        html.Button("Close", id="close-popup", n_clicks=0,
-                    style={"margin-top": "20px", "padding": "5px 10px"})
+        html.Button("Close", id="close-popup", n_clicks=0, style={
+            "margin-top": "20px", "padding": "5px 10px"
+        })
     ])
 ])
 
 # ----------------------------
-# Callback for popup
+# Callbacks
 # ----------------------------
 @app.callback(
     Output("popup-div", "style"),
@@ -101,30 +91,34 @@ def display_popup(clickData, n_clicks, current_style):
     ctx = dash.callback_context
     if not ctx.triggered:
         return current_style, "", ""
-
+    
     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
 
+    # Close popup
     if triggered_id == "close-popup":
         current_style["display"] = "none"
         return current_style, "", ""
-
+    
+    # Show popup for clicked country
     if clickData:
         country = clickData["points"][0]["hovertext"]
         current_style["display"] = "block"
-        df = indicator_data.get(country)
-        if df is None:
-            return current_style, f"{country} Details", html.P("No data available")
 
-        # Generate charts for all numeric indicators
-        charts = []
-        for col in df.columns:
-            if col not in ["Location", "ISO3_code", "Year"]:
-                chart = dcc.Graph(
-                    figure=px.line(df, x="Year", y=col, title=f"{country} {col} Trend", template="plotly_dark")
-                )
-                charts.append(chart)
+        # Filter data for the country
+        df = socio_df[socio_df["Country"] == country]
+        if df.empty:
+            return current_style, f"{country} Details", html.P("No data available", style={"color": "white"})
+        
+        # Line charts for GDP_per_capita, HDI
+        gdp_chart = dcc.Graph(
+            figure=px.line(df, x="Year", y="GDP_per_capita", title=f"{country} GDP per Capita", template="plotly_dark")
+        )
+        hdi_chart = dcc.Graph(
+            figure=px.line(df, x="Year", y="HDI", title=f"{country} HDI", template="plotly_dark")
+        )
 
-        return current_style, f"{country} Details", html.Div(charts)
+        charts = html.Div([gdp_chart, hdi_chart])
+        return current_style, f"{country} Details", charts
 
     return current_style, "", ""
 
