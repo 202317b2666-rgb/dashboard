@@ -13,7 +13,7 @@ hex_df = hex_df.set_index("iso_alpha")
 # ----------------------------
 # Load full socio-economic data
 # ----------------------------
-socio_df = pd.read_csv("final_socio_cleaned.csv")
+socio_df = pd.read_csv("final_with_socio_cleaned.csv")
 # Expected columns: Location, ISO3_code, Year, GDP, HDI, LifeExpectancy, etc.
 
 # Convert to dictionary keyed by country
