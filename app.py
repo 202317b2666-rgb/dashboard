@@ -4,27 +4,25 @@ from dash import Dash, dcc, html, Input, Output, State
 import dash_bootstrap_components as dbc
 
 # -----------------------------
-# Load data
+# Load Data
 # -----------------------------
 df = pd.read_csv("final_with_socio_cleaned.csv")
-hex_df = pd.read_csv("Hex.csv")  # columns: Country/ISO3/hex
-
-# Merge hex colors
-df = df.merge(hex_df[['ISO3', 'hex']], on='ISO3', how='left')
-
 df["Year"] = df["Year"].astype(int)
-years = sorted(df["Year"].unique().tolist())
+years = sorted(df["Year"].unique().tolist())  # python list for slider
+
+# Hex colors
+hex_df = pd.read_csv("Hex.csv")
+hex_df.columns = hex_df.columns.str.strip()  # remove spaces
+# Merge safely
+if 'ISO3' not in hex_df.columns and 'iso_alpha' in hex_df.columns:
+    hex_df = hex_df.rename(columns={'iso_alpha':'ISO3'})
+df = df.merge(hex_df[['ISO3', 'hex']], on='ISO3', how='left')
 
 # -----------------------------
 # Dash App
 # -----------------------------
-app = Dash(
-    __name__,
-    external_stylesheets=[dbc.themes.DARKLY],
-    suppress_callback_exceptions=True
-)
-
-server = app.server  # REQUIRED for Render
+app = Dash(__name__, external_stylesheets=[dbc.themes.DARKLY], suppress_callback_exceptions=True)
+server = app.server
 
 # -----------------------------
 # Layout
@@ -32,13 +30,9 @@ server = app.server  # REQUIRED for Render
 app.layout = dbc.Container(
     fluid=True,
     children=[
+        html.H2("🌍 Global Health Dashboard", style={"textAlign": "center", "margin": "20px"}),
 
-        html.H2(
-            "🌍 Global Health Dashboard",
-            style={"textAlign": "center", "margin": "20px"}
-        ),
-
-        # ---- Year Slider ----
+        # Year Slider
         html.Div([
             html.Label("Select Year"),
             dcc.Slider(
@@ -51,13 +45,10 @@ app.layout = dbc.Container(
             )
         ], style={"margin": "20px"}),
 
-        # ---- World Map ----
-        dcc.Graph(
-            id="world-map",
-            style={"height": "75vh"}
-        ),
+        # World Map
+        dcc.Graph(id="world-map", style={"height": "75vh"}),
 
-        # ---- Floating Popup ----
+        # Floating Popup
         html.Div(
             id="popup-overlay",
             style={
@@ -77,7 +68,7 @@ app.layout = dbc.Container(
                         "top": "50%",
                         "left": "50%",
                         "transform": "translate(-50%, -50%)",
-                        "width": "80%",
+                        "width": "70%",
                         "backgroundColor": "#111",
                         "padding": "25px",
                         "borderRadius": "10px",
@@ -116,15 +107,10 @@ def update_map(year):
     )
 
     fig.update_layout(
-        geo=dict(
-            showframe=False,
-            showcoastlines=False,
-            bgcolor="black"
-        ),
+        geo=dict(showframe=False, showcoastlines=False, bgcolor="black"),
         paper_bgcolor="black",
         plot_bgcolor="black"
     )
-
     return fig
 
 # -----------------------------
@@ -139,42 +125,36 @@ def update_map(year):
     State("year-slider", "value")
 )
 def show_popup(clickData, close_clicks, year):
-
-    if close_clicks:
-        return {"display": "none"}, "", ""
-
-    if not clickData:
+    if close_clicks or not clickData:
         return {"display": "none"}, "", ""
 
     iso = clickData["points"][0]["location"]
-    row = df[df["ISO3"] == iso]
+    row = df[df["ISO3"] == iso].sort_values("Year")
 
     if row.empty:
         return {"display": "none"}, "", ""
 
-    # Selected year data for line charts
-    row_year = row[row["Year"] == year].iloc[0]
+    r = row[row["Year"] == year].iloc[0]
 
-    # Small country map
-    country_map = px.choropleth(
-        row,
+    # Mini country map
+    mini_map = px.choropleth(
+        row[row["Year"]==year],
         locations="ISO3",
         color="HDI",
         hover_name="Country",
         scope="world",
         color_continuous_scale="Viridis"
     )
-    country_map.update_geos(fitbounds="locations", visible=False)
-    country_map.update_layout(height=150, margin=dict(l=0, r=0, t=0, b=0))
+    mini_map.update_geos(fitbounds="locations", visible=False)
+    mini_map.update_layout(height=150, margin=dict(l=0, r=0, t=0, b=0))
 
-    # Line charts for key indicators
-    line_df = row.sort_values("Year")
+    # Line chart for HDI, GDP, Life Expectancy
     line_fig = px.line(
-        line_df,
+        row,
         x="Year",
-        y=["HDI", "GDP_per_capita", "Life_Expectancy"],  # key indicators
+        y=["HDI", "GDP_per_capita", "Life_Expectancy"],
         labels={"value": "Value", "variable": "Indicator"},
-        title=f"Trends - {row_year['Country']}"
+        title=f"Trends - {r['Country']}"
     )
     line_fig.update_layout(
         plot_bgcolor="black",
@@ -182,15 +162,17 @@ def show_popup(clickData, close_clicks, year):
         font_color="white",
         height=250
     )
+    line_fig.update_xaxes(tickvals=row['Year'], tickangle=45)
 
-    popup_content = html.Div([
-        html.Div([
-            dcc.Graph(figure=country_map, style={'display':'inline-block', 'width':'25%'}),
-            dcc.Graph(figure=line_fig, style={'display':'inline-block', 'width':'70%'})
-        ])
+    content = html.Div([
+        html.P(f"HDI: {r['HDI']}"),
+        html.P(f"GDP per Capita: {r['GDP_per_capita']}"),
+        html.P(f"Life Expectancy: {r['Life_Expectancy']}"),
+        dcc.Graph(figure=line_fig),
+        dcc.Graph(figure=mini_map)
     ])
 
-    return {"display": "block"}, f"{row_year['Country']} ({year})", popup_content
+    return {"display": "block"}, f"{r['Country']} ({year})", content
 
 # -----------------------------
 # Run
