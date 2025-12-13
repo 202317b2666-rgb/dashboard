@@ -2,98 +2,140 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-st.set_page_config(layout="wide")
-st.title("Interactive World Map Dashboard")
+# Set full width layout for a better dashboard experience
+st.set_page_config(layout="wide", page_title="Country Zoom Dashboard")
+
+st.title("Interactive World Map: Click to Zoom")
 
 # Initialize session state for selected country if not already set
 if 'selected_country_iso' not in st.session_state:
     st.session_state['selected_country_iso'] = None
+if 'selected_country_name' not in st.session_state:
+    st.session_state['selected_country_name'] = None
+if 'selected_country_value' not in st.session_state:
+    st.session_state['selected_country_value'] = None
+if 'selected_country_img' not in st.session_state:
+    st.session_state['selected_country_img'] = None
 
-# Sample data for 3 countries
+
+# Sample data including an extra country for variety
 df = pd.DataFrame({
-    "country": ["India", "United States", "China"],
-    "iso": ["IND", "USA", "CHN"],
-    "value": [1, 2, 3],
+    "country": ["India", "United States", "China", "Brazil", "Germany"],
+    "iso": ["IND", "USA", "CHN", "BRA", "DEU"],
+    "value": [10, 25, 45, 15, 30], # Sample metric values
     "img": [
-        "https://upload.wikimedia.org/wikipedia/en/4/41/Flag_of_India.svg",
-        "https://upload.wikimedia.org/wikipedia/en/a/a4/Flag_of_the_United_States.svg",
-        "https://upload.wikimedia.org/wikipedia/commons/0/0d/Flag_of_China.svg"
+        "upload.wikimedia.org",
+        "upload.wikimedia.org",
+        "upload.wikimedia.org",
+        "upload.wikimedia.org",
+        "upload.wikimedia.org"
     ]
 })
 
-def update_selection(selected_iso):
-    """Callback function to update the selected country in the session state."""
-    st.session_state['selected_country_iso'] = selected_iso
-    st.rerun() # Reruns the script to display the new sidebar content
+def update_selection(clicked_iso):
+    """Callback function to update all session state variables."""
+    # Retrieve all relevant data for the clicked ISO from the dataframe
+    country_data = df[df['iso'] == clicked_iso].iloc[0]
+    
+    st.session_state['selected_country_iso'] = clicked_iso
+    st.session_state['selected_country_name'] = country_data['country']
+    st.session_state['selected_country_value'] = country_data['value']
+    st.session_state['selected_country_img'] = country_data['img']
+    
+    # Reruns the script to display the new sidebar content
+    st.rerun() 
 
 # --- Main Dashboard Layout ---
 
-col1, col2 = st.columns([2, 1])
+# The map takes up slightly more space (e.g., 60% of width)
+col1, col2 = st.columns([0, 1])
 
 with col1:
-    st.subheader("World Map Overview")
-    # Create choropleth map using Plotly
+    st.subheader("World Overview Map")
+
+    # Create the main world choropleth map using Plotly
     fig = px.choropleth(
         df,
         locations="iso",
         color="value",
         hover_name="country",
-        custom_data=["iso"], # Use ISO in custom data for the click event
-        color_continuous_scale="Blues"
+        custom_data=["iso"], # Pass ISO code for identification after click
+        color_continuous_scale="Viridis",
+        title="Global Metrics"
     )
 
     fig.update_layout(
-        geo=dict(showframe=False, showcoastlines=False, projection_type="equirectangular"),
-        margin=dict(l=0, r=0, t=0, b=0)
+        geo=dict(
+            showframe=False, 
+            showcoastlines=True, 
+            projection_type="equirectangular"
+        ),
+        margin=dict(l=0, r=0, t=30, b=0),
+        height=500
+    )
+    
+    fig.update_traces(
+        # Standard hover template for the world map
+        hovertemplate="<b>%{hovertext}</b><br>Value: %{z}<extra></extra>"
     )
 
-    # Display the map using st.plotly_chart and configure the click event handling
-    # Streamlit automatically handles the click event with the selection parameter
-    event_data = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+    # Display the map and capture the click event
+    # `on_select="rerun"` makes the script re-execute instantly upon selection
+    event_data = st.plotly_chart(
+        fig, 
+        use_container_width=True, 
+        on_select="rerun", 
+        selection_mode="points"
+    )
     
-    # Check if a selection event occurred (user clicked a point on the map)
+    # Check if a selection event occurred (user clicked a point/country on the map)
     if event_data and event_data.get('selection'):
-        points = event_data['selection']['points']
-        if points:
-            # Extract the ISO code from the custom_data of the clicked point
-            # custom_data is a list: custom_data=[iso, ...] -> points[0]['customdata'][0]
-            clicked_iso = points[0]['customdata'][0] 
+        # Get the selected points list
+        points_data = event_data['selection']['points']
+        if points_data:
+            # Extract the ISO code from the *first* clicked point's custom data
+            clicked_iso = points_data[0]['customdata'][0]
             # Call the update function to handle state change
             update_selection(clicked_iso)
 
 with col2:
-    st.subheader("Selected Country Details")
+    st.subheader("Country Focus View")
     
     if st.session_state['selected_country_iso']:
         # Filter dataframe for the selected country
-        selected_iso = st.session_state['selected_country_iso']
-        country_data = df[df['iso'] == selected_iso].iloc[0]
+        iso = st.session_state['selected_country_iso']
+        name = st.session_state['selected_country_name']
+        value = st.session_state['selected_country_value']
+        img_url = st.session_state['selected_country_img']
 
-        st.markdown(f"### {country_data['country']}")
-        st.image(country_data['img'], width=150)
-        st.write(f"**Data Value:** {country_data['value']}")
-
-        # Optional: Add a specific map for just this country
+        st.markdown(f"### {name}")
+        st.image(img_url, width=100, caption=f"Flag of {name}")
+        st.write(f"**Associated Value:** {value}")
+        
         st.markdown("---")
-        st.write("Zoomed Map View:")
+        
+        # Create a specific, zoomed map for only this country
         fig_zoom = px.choropleth(
-            df[df['iso'] == selected_iso],
+            df[df['iso'] == iso],
             locations="iso",
             color="value",
-            color_continuous_scale="Blues"
+            color_continuous_scale="Viridis",
+            title=f"Zoomed view of {name}"
         )
+        
         fig_zoom.update_layout(
             geo=dict(
                 showframe=False,
-                showcoastlines=False,
+                showcoastlines=True,
                 # Automatically zoom to the selected country's bounds
-                scope=selected_iso.lower() 
+                scope=iso.lower() 
             ),
-            margin=dict(l=0, r=0, t=0, b=0),
-            height=300
+            margin=dict(l=0, r=0, t=30, b=0),
+            height=450
         )
+        
         st.plotly_chart(fig_zoom, use_container_width=True)
 
     else:
-        st.info("Click on a country in the map to see details here.")
+        st.info("Click on a country in the map on the left to display its specific zoomed view and details here.")
 
