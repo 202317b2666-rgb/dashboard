@@ -1,109 +1,119 @@
+# app.py
 import dash
-from dash import dcc, html, Input, Output
-import pandas as pd
+from dash import dcc, html, Input, Output, State
 import plotly.express as px
+import pandas as pd
 
-# Load HEX colors
-hex_df = pd.read_csv("Hex.csv")  # Columns: country, iso_alpha, hex
+# Load Hex.csv
+hex_df = pd.read_csv("Hex.csv")  # columns: country, iso_alpha, hex
 
-# Sample GDP & HDI data for demonstration
-data_df = pd.DataFrame({
-    "country": ["India", "USA", "China"],
-    "year": [2018, 2019, 2020, 2021, 2022] * 3,
-    "GDP": [2.5,2.7,2.6,3.0,3.2, 21,22,20,23,24, 13,14,13,15,16],
-    "HDI": [0.64,0.65,0.66,0.67,0.68, 0.92,0.93,0.92,0.94,0.95, 0.76,0.77,0.78,0.79,0.80],
-    "iso_alpha": ["IND"]*5 + ["USA"]*5 + ["CHN"]*5
+# Sample indicators data (replace with your actual data later)
+indicators_df = pd.DataFrame({
+    "iso_alpha": ["IND", "USA", "CHN"],
+    "GDP": [[2.5, 2.7, 2.6, 3.0, 3.2], [21, 22, 20, 23, 24], [13, 14, 15, 16, 17]],
+    "Year": [[2018, 2019, 2020, 2021, 2022]]*3
 })
 
-# Merge HEX info for coloring
-map_df = hex_df.copy()
+# Create color map for countries
+color_map = {row['iso_alpha']: row['hex'] for _, row in hex_df.iterrows()}
 
-# Dash app
+# Create Dash app
 app = dash.Dash(__name__)
-app.title = "Interactive World Map"
 
-# Layout
+# Create initial choropleth map
+fig = px.choropleth(
+    hex_df,
+    locations="iso_alpha",
+    color="iso_alpha",  # placeholder, colors applied via color_discrete_map
+    hover_name="country",
+    color_discrete_map=color_map
+)
+
+fig.update_geos(
+    showcoastlines=True,
+    coastlinecolor="white",
+    showocean=True,
+    oceancolor="#4DA6FF",  # sea blue
+    showland=True
+)
+fig.update_layout(
+    margin={"r":0,"t":0,"l":0,"b":0},
+    paper_bgcolor="#1e1e1e",  # dark background
+    plot_bgcolor="#1e1e1e"
+)
+
+# App layout
 app.layout = html.Div([
-    html.H1("Interactive World Map", style={"textAlign": "center"}),
+    html.H1("Interactive World Map", style={'color':'white', 'textAlign':'center'}),
+    dcc.Graph(id="world-map", figure=fig, style={'height':'80vh'}),
+    
+    # Hidden div for modal
+    html.Div(
+        id="modal-container",
+        style={"display":"none"}
+    )
+], style={'backgroundColor':'#1e1e1e', 'height':'100vh'})
 
-    dcc.Graph(
-        id="world-map",
-        figure=px.scatter_geo(
-            map_df,
-            lat=[21, 37, 35],  # Approx lat for India, USA, China
-            lon=[78, -95, 103],  # Approx lon
-            hover_name="country",
-            projection="natural earth"
-        ).update_traces(marker=dict(size=12, color=map_df["hex"]))
-         .update_geos(showcoastlines=True, coastlinecolor="white",
-                      showland=True, landcolor="lightgrey",
-                      showocean=True, oceancolor="#4DA6FF")
-    ),
+# Callback to show modal on country click
+@app.callback(
+    Output("modal-container", "children"),
+    Output("modal-container", "style"),
+    Input("world-map", "clickData"),
+)
+def display_modal(clickData):
+    if clickData is None:
+        return "", {"display":"none"}
+    
+    iso_code = clickData['points'][0]['location']
+    country_name = hex_df.loc[hex_df['iso_alpha']==iso_code, 'country'].values[0]
 
-    html.Div(id="popup", style={
-        "position": "fixed",
-        "top": "10%",
-        "left": "10%",
-        "width": "80%",
-        "height": "80%",
-        "backgroundColor": "white",
-        "color": "black",
-        "zIndex": "9999",
-        "display": "none",
-        "padding": "20px",
-        "overflow": "auto",
-        "border": "2px solid black",
-        "borderRadius": "10px"
+    # Sample line chart for GDP
+    country_data = indicators_df.loc[indicators_df['iso_alpha']==iso_code].iloc[0]
+    gdp_fig = px.line(
+        x=country_data['Year'],
+        y=country_data['GDP'],
+        labels={"x":"Year", "y":"GDP"},
+        title=f"{country_name} GDP Trend"
+    )
+    gdp_fig.update_layout(paper_bgcolor="white", plot_bgcolor="white", font_color="black")
+
+    modal_content = html.Div([
+        html.Div([
+            html.H2(f"{country_name} Details", style={"marginBottom":"10px"}),
+            dcc.Graph(figure=gdp_fig, style={"height":"300px"}),
+            html.Button("Close", id="close-modal", n_clicks=0)
+        ], style={
+            "backgroundColor":"white",
+            "padding":"20px",
+            "borderRadius":"10px",
+            "width":"50%",
+            "margin":"50px auto",
+            "textAlign":"center"
+        })
+    ], id="modal", style={
+        "position":"fixed",
+        "top":"0",
+        "left":"0",
+        "width":"100%",
+        "height":"100%",
+        "backgroundColor":"rgba(0,0,0,0.5)",
+        "zIndex":"9999",
+        "display":"block"
     })
-])
 
-# Callback for country click
+    return modal_content, {"display":"block"}
+
+# Callback to close modal
 @app.callback(
-    Output("popup", "style"),
-    Output("popup", "children"),
-    Input("world-map", "clickData")
+    Output("modal-container", "style"),
+    Input("close-modal", "n_clicks"),
+    State("modal-container", "style")
 )
-def display_popup(clickData):
-    if clickData:
-        country_name = clickData["points"][0]["hovertext"]
-        # Filter sample data for that country
-        country_data = data_df[data_df["country"] == country_name]
+def close_modal(n_clicks, style):
+    if n_clicks > 0:
+        style['display'] = "none"
+    return style
 
-        # GDP line chart
-        fig_gdp = px.line(country_data, x="year", y="GDP", title=f"{country_name} GDP")
-        fig_hdi = px.line(country_data, x="year", y="HDI", title=f"{country_name} HDI")
-
-        return {
-            "position": "fixed",
-            "top": "10%",
-            "left": "10%",
-            "width": "80%",
-            "height": "80%",
-            "backgroundColor": "white",
-            "color": "black",
-            "zIndex": "9999",
-            "display": "block",
-            "padding": "20px",
-            "overflow": "auto",
-            "border": "2px solid black",
-            "borderRadius": "10px"
-        }, html.Div([
-            html.H2(f"{country_name} Details"),
-            dcc.Graph(figure=fig_gdp),
-            dcc.Graph(figure=fig_hdi),
-            html.Button("Close", id="close-btn", n_clicks=0)
-        ])
-    else:
-        return {"display": "none"}, ""
-
-# Callback to close popup
-@app.callback(
-    Output("popup", "style"),
-    Input("close-btn", "n_clicks"),
-    prevent_initial_call=True
-)
-def close_popup(n):
-    return {"display": "none"}
-
+# Run server
 if __name__ == "__main__":
     app.run_server(debug=True)
