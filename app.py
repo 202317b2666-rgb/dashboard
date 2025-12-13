@@ -5,44 +5,30 @@ import pandas as pd
 import json
 
 # ----------------------------
-# Load Hex.csv
+# Load Hex colors
 # ----------------------------
-# Sample structure:
-# country,iso_alpha,hex
-hex_df = pd.read_csv("Hex.csv")
+hex_df = pd.read_csv("Hex.csv")  # country, iso_alpha, hex
+hex_df = hex_df.set_index("iso_alpha")
 
 # ----------------------------
-# Sample indicator data
+# Load full socio-economic data
 # ----------------------------
-indicator_data = {
-    "India": pd.DataFrame({
-        "Year": [2018, 2019, 2020, 2021, 2022],
-        "GDP": [2.5, 2.7, 2.6, 3.0, 3.2],
-        "HDI": [0.64, 0.65, 0.65, 0.66, 0.67]
-    }),
-    "USA": pd.DataFrame({
-        "Year": [2018, 2019, 2020, 2021, 2022],
-        "GDP": [20.5, 21.0, 20.8, 22.0, 23.0],
-        "HDI": [0.92, 0.92, 0.92, 0.93, 0.93]
-    }),
-    "China": pd.DataFrame({
-        "Year": [2018, 2019, 2020, 2021, 2022],
-        "GDP": [13.5, 14.0, 14.2, 15.0, 16.0],
-        "HDI": [0.75, 0.76, 0.76, 0.77, 0.78]
-    })
-}
+socio_df = pd.read_csv("final_socio_cleaned.csv")
+# Expected columns: Location, ISO3_code, Year, GDP, HDI, LifeExpectancy, etc.
+
+# Convert to dictionary keyed by country
+indicator_data = {}
+for country, df in socio_df.groupby("Location"):
+    indicator_data[country] = df.sort_values("Year")
 
 # ----------------------------
-# Load GeoJSON for countries
+# Load GeoJSON
 # ----------------------------
 with open("countries.geo.json") as f:
     geojson = json.load(f)
 
-# Merge colors with ISO codes
-hex_df = hex_df.set_index("iso_alpha")
-
 # ----------------------------
-# Plotly choropleth map
+# Choropleth map
 # ----------------------------
 fig = px.choropleth(
     locations=hex_df.index,
@@ -66,17 +52,16 @@ fig.update_layout(
 )
 
 # ----------------------------
-# Dash app
+# Dash App
 # ----------------------------
 app = dash.Dash(__name__)
 app.title = "Global Health Dashboard"
 
 app.layout = html.Div(style={"backgroundColor": "#0c0c0c", "height": "100vh", "padding": "20px"}, children=[
     html.H1("Global Health Dashboard", style={"color": "white", "textAlign": "center"}),
-    
+
     dcc.Graph(id="world-map", figure=fig, style={"height": "75vh", "margin-top": "20px"}),
-    
-    # Hidden popup
+
     html.Div(id="popup-div", style={
         "display": "none",
         "position": "fixed",
@@ -101,7 +86,7 @@ app.layout = html.Div(style={"backgroundColor": "#0c0c0c", "height": "100vh", "p
 ])
 
 # ----------------------------
-# Callbacks
+# Callback for popup
 # ----------------------------
 @app.callback(
     Output("popup-div", "style"),
@@ -116,28 +101,30 @@ def display_popup(clickData, n_clicks, current_style):
     ctx = dash.callback_context
     if not ctx.triggered:
         return current_style, "", ""
-    
+
     triggered_id = ctx.triggered[0]['prop_id'].split('.')[0]
 
     if triggered_id == "close-popup":
         current_style["display"] = "none"
         return current_style, "", ""
-    
+
     if clickData:
         country = clickData["points"][0]["hovertext"]
         current_style["display"] = "block"
         df = indicator_data.get(country)
         if df is None:
             return current_style, f"{country} Details", html.P("No data available")
-        
-        gdp_chart = dcc.Graph(
-            figure=px.line(df, x="Year", y="GDP", title=f"{country} GDP Trend", template="plotly_dark")
-        )
-        hdi_chart = dcc.Graph(
-            figure=px.line(df, x="Year", y="HDI", title=f"{country} HDI Trend", template="plotly_dark")
-        )
-        charts = html.Div([gdp_chart, hdi_chart])
-        return current_style, f"{country} Details", charts
+
+        # Generate charts for all numeric indicators
+        charts = []
+        for col in df.columns:
+            if col not in ["Location", "ISO3_code", "Year"]:
+                chart = dcc.Graph(
+                    figure=px.line(df, x="Year", y=col, title=f"{country} {col} Trend", template="plotly_dark")
+                )
+                charts.append(chart)
+
+        return current_style, f"{country} Details", html.Div(charts)
 
     return current_style, "", ""
 
