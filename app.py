@@ -1,116 +1,151 @@
 import streamlit as st
 import pandas as pd
+import json
 import plotly.express as px
+from streamlit_plotly_events import plotly_events
 
-# -------------------------------
-# Page config
-# -------------------------------
+# ----------------------------
+# PAGE CONFIG
+# ----------------------------
 st.set_page_config(
     page_title="🌍 Global Health Dashboard",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# -------------------------------
-# Session state (CRITICAL FIX)
-# -------------------------------
-if "selected_country" not in st.session_state:
-    st.session_state.selected_country = None
+st.title("🌍 Global Health Dashboard")
 
-# -------------------------------
-# Load data
-# -------------------------------
+# ----------------------------
+# LOAD DATA
+# ----------------------------
 @st.cache_data
 def load_data():
-    return pd.read_csv("final_with_socio_cleaned.csv")
+    df = pd.read_csv("final_with_socio_cleaned.csv")
+    hex_df = pd.read_csv("Hex.csv")
+    with open("countries.geo.json") as f:
+        geo = json.load(f)
+    return df, hex_df, geo
 
-df = load_data()
+df, hex_df, geojson = load_data()
 
-# -------------------------------
-# Sidebar controls
-# -------------------------------
-st.sidebar.header("📅 Year Selection")
+# ----------------------------
+# CLEAN + MERGE
+# ----------------------------
+df["ISO3"] = df["ISO3"].astype(str)
+hex_df["iso_alpha"] = hex_df["iso_alpha"].astype(str)
 
-year = st.sidebar.slider(
-    "Select Year",
-    int(df["Year"].min()),
-    int(df["Year"].max()),
-    int(df["Year"].max())
+merged = df.merge(
+    hex_df,
+    left_on="ISO3",
+    right_on="iso_alpha",
+    how="left"
 )
 
-df_year = df[df["Year"] == year]
+merged["hex"] = merged["hex"].fillna("#444444")
 
-# -------------------------------
-# Title
-# -------------------------------
-st.title("🌍 Global Health Dashboard")
-st.caption(f"Showing data for year **{year}**")
+# ----------------------------
+# YEAR SLIDER
+# ----------------------------
+min_year = int(merged["Year"].min())
+max_year = int(merged["Year"].max())
 
-# -------------------------------
-# Choropleth Map
-# -------------------------------
+year = st.slider(
+    "📅 Select Year",
+    min_year,
+    max_year,
+    max_year
+)
+
+year_df = merged[merged["Year"] == year]
+
+# ----------------------------
+# WORLD MAP
+# ----------------------------
 fig = px.choropleth(
-    df_year,
+    year_df,
+    geojson=geojson,
     locations="ISO3",
-    color="HDI",
+    featureidkey="properties.ISO_A3",
+    color="hex",
+    color_discrete_map="identity",
     hover_name="Country",
-    color_continuous_scale="Viridis",
-    title="Human Development Index (HDI)",
+)
+
+fig.update_geos(
+    showcoastlines=False,
+    showcountries=False,
+    bgcolor="black"
 )
 
 fig.update_layout(
-    margin=dict(l=0, r=0, t=50, b=0),
-    height=600
+    margin=dict(l=0, r=0, t=0, b=0),
+    paper_bgcolor="black",
+    plot_bgcolor="black",
 )
 
-# -------------------------------
-# Capture click event
-# -------------------------------
-click_data = st.plotly_chart(
+# ----------------------------
+# CLICK EVENTS
+# ----------------------------
+selected = plotly_events(
     fig,
-    use_container_width=True,
-    key="map",
-    on_select="rerun"
+    click_event=True,
+    hover_event=False,
+    select_event=False,
+    override_height=600,
+    override_width="100%"
 )
 
-if click_data and "points" in click_data:
-    st.session_state.selected_country = click_data["points"][0]["location"]
+# ----------------------------
+# STORE CLICKED COUNTRY
+# ----------------------------
+if selected:
+    iso = selected[0]["location"]
 
-# -------------------------------
-# Floating popup
-# -------------------------------
-if st.session_state.selected_country:
-    country_code = st.session_state.selected_country
-    row = df_year[df_year["ISO3"] == country_code].iloc[0]
+    row = year_df[year_df["ISO3"] == iso]
+    if not row.empty:
+        r = row.iloc[0]
+        st.session_state["popup"] = {
+            "Country": r["Country"],
+            "HDI": r["HDI"],
+            "GDP": r["GDP_per_capita"],
+            "Gini": r["Gini_Index"],
+            "Life": r["Life_Expectancy"],
+            "Median": r["Median_Age_Est"],
+            "COVID_D": r["COVID_Deaths"],
+            "COVID_C": r["COVID_Cases"]
+        }
+
+# ----------------------------
+# FLOATING POPUP
+# ----------------------------
+if "popup" in st.session_state:
+    p = st.session_state["popup"]
 
     st.markdown(
         f"""
-        <style>
-        .popup {{
-            position: fixed;
-            right: 30px;
-            top: 120px;
-            background-color: #111;
-            color: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.6);
-            width: 300px;
-            z-index: 9999;
-        }}
-        </style>
-
-        <div class="popup">
-            <h3>📊 {row['Country']}</h3>
-            <p><b>HDI:</b> {row['HDI']}</p>
-            <p><b>GDP per Capita:</b> {row['GDP_per_capita']}</p>
-            <p><b>Gini Index:</b> {row['Gini_Index']}</p>
-            <p><b>Life Expectancy:</b> {row['Life_Expectancy']}</p>
-            <p><b>Median Age (Est):</b> {row['Median_Age_Est']}</p>
-            <p><b>COVID Deaths / mil:</b> {row['COVID_Deaths']}</p>
+        <div style="
+            position:fixed;
+            top:90px;
+            right:40px;
+            width:320px;
+            background:#0b1c2d;
+            padding:20px;
+            border-radius:14px;
+            color:white;
+            z-index:9999;
+            box-shadow:0 0 25px rgba(0,0,0,0.7);
+            font-size:14px;
+        ">
+        <h4 style="margin-top:0;">📊 {p['Country']}</h4>
+        <hr style="border:1px solid #333;">
+        <b>HDI:</b> {p['HDI']}<br>
+        <b>GDP / Capita:</b> {p['GDP']}<br>
+        <b>Gini Index:</b> {p['Gini']}<br>
+        <b>Life Expectancy:</b> {p['Life']}<br>
+        <b>Median Age:</b> {p['Median']}<br>
+        <b>COVID Deaths / mil:</b> {p['COVID_D']}<br>
+        <b>COVID Cases / mil:</b> {p['COVID_C']}
         </div>
         """,
         unsafe_allow_html=True
     )
-
-    # 🔥 MOST IMPORTANT LINE (BUG FIX)
-    st.session_state.selected_country = None
