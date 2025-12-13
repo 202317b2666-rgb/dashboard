@@ -3,7 +3,7 @@ from dash import dcc, html, Input, Output, State
 import plotly.express as px
 import pandas as pd
 
-# Sample color data
+# Sample data
 hex_df = pd.DataFrame({
     "country":["India","USA","China"],
     "iso_alpha":["IND","USA","CHN"],
@@ -22,7 +22,7 @@ color_map = {row['iso_alpha']: row['hex'] for _, row in hex_df.iterrows()}
 
 app = dash.Dash(__name__)
 
-# Choropleth map
+# Map figure
 fig = px.choropleth(
     hex_df,
     locations="iso_alpha",
@@ -51,17 +51,16 @@ def show_modal(clickData, style):
 
     iso = clickData['points'][0]['location']
     country_name = hex_df.loc[hex_df['iso_alpha']==iso, 'country'].values[0]
-
     data = indicators_df.loc[indicators_df['iso_alpha']==iso].iloc[0]
 
-    # GDP line chart
+    # Line charts for GDP and HDI
     gdp_fig = px.line(x=data['Year'], y=data['GDP'], title=f"{country_name} GDP")
     gdp_fig.update_layout(paper_bgcolor='white', plot_bgcolor='white', font_color='black')
 
-    # HDI line chart
     hdi_fig = px.line(x=data['Year'], y=data['HDI'], title=f"{country_name} HDI")
     hdi_fig.update_layout(paper_bgcolor='white', plot_bgcolor='white', font_color='black')
 
+    # Modal content
     modal_content = html.Div([
         html.Div([
             html.H2(f"{country_name} Details"),
