@@ -6,7 +6,7 @@ import pandas as pd
 # ----------------------------
 # Load datasets
 # ----------------------------
-socio_df = pd.read_csv("final_socio_cleaned.csv")
+socio_df = pd.read_csv("final_with_socio_cleaned.csv")
 hex_df = pd.read_csv("Hex.csv")
 
 # Merge colors
