@@ -2,7 +2,6 @@ import pandas as pd
 import plotly.express as px
 from dash import Dash, dcc, html, Input, Output, State, ctx
 import dash_bootstrap_components as dbc
-from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
 # -----------------------------
@@ -62,16 +61,15 @@ app.layout = dbc.Container(
                 "left": "0",
                 "width": "100%",
                 "height": "100%",
-                "backgroundColor": "rgba(0,0,0,0.75)",
+                "overflowY": "scroll",
+                "backgroundColor": "rgba(0,0,0,0.85)",
                 "zIndex": "999"
             },
             children=[
                 html.Div(
                     style={
-                        "position": "absolute",
-                        "top": "50%",
-                        "left": "50%",
-                        "transform": "translate(-50%, -50%)",
+                        "position": "relative",
+                        "margin": "50px auto",
                         "width": "80%",
                         "backgroundColor": "#111",
                         "padding": "25px",
@@ -111,11 +109,7 @@ def update_map(year):
     )
 
     fig.update_layout(
-        geo=dict(
-            showframe=False,
-            showcoastlines=False,
-            bgcolor="black"
-        ),
+        geo=dict(showframe=False, showcoastlines=False, bgcolor="black"),
         paper_bgcolor="black",
         plot_bgcolor="black"
     )
@@ -123,7 +117,7 @@ def update_map(year):
     return fig
 
 # -----------------------------
-# Popup Callback with Line Charts
+# Popup Callback with Individual Graphs
 # -----------------------------
 @app.callback(
     Output("popup-overlay", "style"),
@@ -138,47 +132,40 @@ def show_popup(clickData, close_clicks, year):
 
     if triggered_id == "close-popup":
         return {"display": "none"}, "", ""
-
     if triggered_id != "world-map" or not clickData:
         return {"display": "none"}, "", ""
 
     iso = clickData["points"][0]["location"]
-    country_df = df[df["ISO3"] == iso]
+    country_df = df[df["ISO3"] == iso].sort_values("Year")
 
     if country_df.empty:
         return {"display": "none"}, "", ""
 
-    # Create line charts for selected attributes
-    fig = make_subplots(rows=2, cols=2, subplot_titles=("HDI", "GDP per Capita", "Life Expectancy", "Population Density"))
+    # List of indicators to plot
+    indicators = ["HDI", "GDP_per_capita", "Life_Expectancy", "Population_Density",
+                  "Median_Age", "Gini_Index", "COVID_Deaths_per_mil"]
 
-    # HDI
-    fig.add_trace(go.Scatter(
-        x=country_df["Year"], y=country_df["HDI"], mode="lines+markers", name="HDI"
-    ), row=1, col=1)
+    graph_list = []
 
-    # GDP per Capita
-    fig.add_trace(go.Scatter(
-        x=country_df["Year"], y=country_df["GDP_per_capita"], mode="lines+markers", name="GDP per Capita"
-    ), row=1, col=2)
+    for ind in indicators:
+        if ind in country_df.columns:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=country_df["Year"],
+                y=country_df[ind],
+                mode="lines+markers",
+                name=ind
+            ))
+            fig.update_layout(
+                template="plotly_dark",
+                title=ind,
+                height=250,
+                margin=dict(l=30, r=30, t=40, b=20)
+            )
+            fig.update_xaxes(tickvals=country_df["Year"], tickangle=45)
+            graph_list.append(dcc.Graph(figure=fig))
 
-    # Life Expectancy
-    fig.add_trace(go.Scatter(
-        x=country_df["Year"], y=country_df["Life_Expectancy"], mode="lines+markers", name="Life Expectancy"
-    ), row=2, col=1)
-
-    # Population Density
-    fig.add_trace(go.Scatter(
-        x=country_df["Year"], y=country_df["Population_Density"], mode="lines+markers", name="Population Density"
-    ), row=2, col=2)
-
-    fig.update_layout(
-        height=500,
-        width=800,
-        template="plotly_dark",
-        margin=dict(t=50, b=20)
-    )
-
-    return {"display": "block"}, f"{country_df.iloc[0]['Country']} ({year})", dcc.Graph(figure=fig)
+    return {"display": "block"}, f"{country_df.iloc[0]['Country']} ({year})", html.Div(graph_list)
 
 # -----------------------------
 # Run
