@@ -2,6 +2,7 @@ import dash
 from dash import dcc, html, Output, Input, State
 import plotly.express as px
 import pandas as pd
+import json
 
 # ----------------------------
 # Load datasets
@@ -9,32 +10,42 @@ import pandas as pd
 socio_df = pd.read_csv("final_with_socio_cleaned.csv")
 hex_df = pd.read_csv("Hex.csv")
 
-# Merge colors
+# Map country name -> color
 country_colors = dict(zip(hex_df["country"], hex_df["hex"]))
+
+# Load geojson for country shapes
+with open("countries.geo.json") as f:
+    countries_geo = json.load(f)
 
 # ----------------------------
 # Prepare map figure
 # ----------------------------
-map_df = socio_df.groupby("Country").first().reset_index()  # one row per country
-
-fig = px.scatter_geo(
-    map_df,
-    lat=[0]*len(map_df),  # placeholder lat
-    lon=[0]*len(map_df),  # placeholder lon
+fig = px.choropleth(
+    socio_df.groupby("Country").first().reset_index(),  # one row per country
+    geojson=countries_geo,
+    locations="ISO3",       # ISO3 codes must match geojson 'id'
+    color="Country",        # temporary, colors will be replaced manually
     hover_name="Country",
     projection="natural earth",
-    title="Global Health Dashboard"
+    title="Global Health Dashboard",
 )
 
-# Assign country colors if exists in Hex.csv
-fig.update_traces(marker=dict(size=12, color=[
-    country_colors.get(c, "blue") for c in map_df["Country"]
-]))
+# Update colors using Hex.csv
+for i, c in enumerate(socio_df["Country"].unique()):
+    if c in country_colors:
+        fig.data[0].marker.colors[i] = country_colors[c]
 
+# Geo layout adjustments
 fig.update_geos(
+    visible=False,
     showcoastlines=True, coastlinecolor="white",
     showland=True, landcolor="lightgrey",
     showocean=True, oceancolor="#4DA6FF"
+)
+
+fig.update_layout(
+    template="plotly_dark",
+    margin={"r":0,"t":50,"l":0,"b":0}
 )
 
 # ----------------------------
@@ -46,9 +57,9 @@ app.title = "Global Health Dashboard"
 # ----------------------------
 # Layout
 # ----------------------------
-app.layout = html.Div([
+app.layout = html.Div(style={"background-color":"#111"}, children=[
     html.H1("Global Health Dashboard", style={"color": "white", "textAlign": "center"}),
-    dcc.Graph(id="world-map", figure=fig, style={"height": "70vh"}),
+    dcc.Graph(id="world-map", figure=fig, style={"height": "80vh"}),
     
     # Floating popup window
     html.Div(id="popup-div", style={
@@ -101,24 +112,24 @@ def display_popup(clickData, n_clicks, current_style):
     
     # Show popup for clicked country
     if clickData:
-        country = clickData["points"][0]["hovertext"]
+        country = clickData["points"][0]["location"]  # ISO3 code from choropleth
+        df = socio_df[socio_df["ISO3"] == country]
+        country_name = df["Country"].iloc[0] if not df.empty else country
         current_style["display"] = "block"
 
-        # Filter data for the country
-        df = socio_df[socio_df["Country"] == country]
         if df.empty:
-            return current_style, f"{country} Details", html.P("No data available", style={"color": "white"})
-        
-        # Line charts for GDP_per_capita, HDI
-        gdp_chart = dcc.Graph(
-            figure=px.line(df, x="Year", y="GDP_per_capita", title=f"{country} GDP per Capita", template="plotly_dark")
-        )
-        hdi_chart = dcc.Graph(
-            figure=px.line(df, x="Year", y="HDI", title=f"{country} HDI", template="plotly_dark")
-        )
+            return current_style, f"{country_name} Details", html.P("No data available", style={"color": "white"})
 
-        charts = html.Div([gdp_chart, hdi_chart])
-        return current_style, f"{country} Details", charts
+        # Line charts for indicators
+        charts = []
+        for col in ["GDP_per_capita", "HDI", "Life_Expectancy", "PM25"]:
+            if col in df.columns:
+                chart = dcc.Graph(
+                    figure=px.line(df, x="Year", y=col, title=f"{country_name} {col.replace('_',' ')}", template="plotly_dark")
+                )
+                charts.append(chart)
+
+        return current_style, f"{country_name} Details", html.Div(charts)
 
     return current_style, "", ""
 
