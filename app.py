@@ -1,28 +1,26 @@
 import pandas as pd
 import plotly.express as px
-from dash import Dash, dcc, html, Input, Output, State
+from dash import Dash, dcc, html, Input, Output, State, ctx
 import dash_bootstrap_components as dbc
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
 
 # -----------------------------
-# Load Data
+# Load data
 # -----------------------------
 df = pd.read_csv("final_with_socio_cleaned.csv")
 df["Year"] = df["Year"].astype(int)
-years = sorted(df["Year"].unique().tolist())  # python list for slider
-
-# Hex colors
-hex_df = pd.read_csv("Hex.csv")
-hex_df.columns = hex_df.columns.str.strip()  # remove spaces
-# Merge safely
-if 'ISO3' not in hex_df.columns and 'iso_alpha' in hex_df.columns:
-    hex_df = hex_df.rename(columns={'iso_alpha':'ISO3'})
-df = df.merge(hex_df[['ISO3', 'hex']], on='ISO3', how='left')
+years = sorted(df["Year"].unique().tolist())  # convert to python list
 
 # -----------------------------
 # Dash App
 # -----------------------------
-app = Dash(__name__, external_stylesheets=[dbc.themes.DARKLY], suppress_callback_exceptions=True)
-server = app.server
+app = Dash(
+    __name__,
+    external_stylesheets=[dbc.themes.DARKLY],
+    suppress_callback_exceptions=True
+)
+server = app.server  # REQUIRED for Render
 
 # -----------------------------
 # Layout
@@ -30,9 +28,12 @@ server = app.server
 app.layout = dbc.Container(
     fluid=True,
     children=[
-        html.H2("🌍 Global Health Dashboard", style={"textAlign": "center", "margin": "20px"}),
+        html.H2(
+            "🌍 Global Health Dashboard",
+            style={"textAlign": "center", "margin": "20px"}
+        ),
 
-        # Year Slider
+        # ---- Year Slider ----
         html.Div([
             html.Label("Select Year"),
             dcc.Slider(
@@ -45,10 +46,13 @@ app.layout = dbc.Container(
             )
         ], style={"margin": "20px"}),
 
-        # World Map
-        dcc.Graph(id="world-map", style={"height": "75vh"}),
+        # ---- World Map ----
+        dcc.Graph(
+            id="world-map",
+            style={"height": "75vh"}
+        ),
 
-        # Floating Popup
+        # ---- Floating Popup ----
         html.Div(
             id="popup-overlay",
             style={
@@ -68,7 +72,7 @@ app.layout = dbc.Container(
                         "top": "50%",
                         "left": "50%",
                         "transform": "translate(-50%, -50%)",
-                        "width": "70%",
+                        "width": "80%",
                         "backgroundColor": "#111",
                         "padding": "25px",
                         "borderRadius": "10px",
@@ -107,14 +111,19 @@ def update_map(year):
     )
 
     fig.update_layout(
-        geo=dict(showframe=False, showcoastlines=False, bgcolor="black"),
+        geo=dict(
+            showframe=False,
+            showcoastlines=False,
+            bgcolor="black"
+        ),
         paper_bgcolor="black",
         plot_bgcolor="black"
     )
+
     return fig
 
 # -----------------------------
-# Popup Callback
+# Popup Callback with Line Charts
 # -----------------------------
 @app.callback(
     Output("popup-overlay", "style"),
@@ -125,54 +134,51 @@ def update_map(year):
     State("year-slider", "value")
 )
 def show_popup(clickData, close_clicks, year):
-    if close_clicks or not clickData:
+    triggered_id = ctx.triggered_id
+
+    if triggered_id == "close-popup":
+        return {"display": "none"}, "", ""
+
+    if triggered_id != "world-map" or not clickData:
         return {"display": "none"}, "", ""
 
     iso = clickData["points"][0]["location"]
-    row = df[df["ISO3"] == iso].sort_values("Year")
+    country_df = df[df["ISO3"] == iso]
 
-    if row.empty:
+    if country_df.empty:
         return {"display": "none"}, "", ""
 
-    r = row[row["Year"] == year].iloc[0]
+    # Create line charts for selected attributes
+    fig = make_subplots(rows=2, cols=2, subplot_titles=("HDI", "GDP per Capita", "Life Expectancy", "Population Density"))
 
-    # Mini country map
-    mini_map = px.choropleth(
-        row[row["Year"]==year],
-        locations="ISO3",
-        color="HDI",
-        hover_name="Country",
-        scope="world",
-        color_continuous_scale="Viridis"
+    # HDI
+    fig.add_trace(go.Scatter(
+        x=country_df["Year"], y=country_df["HDI"], mode="lines+markers", name="HDI"
+    ), row=1, col=1)
+
+    # GDP per Capita
+    fig.add_trace(go.Scatter(
+        x=country_df["Year"], y=country_df["GDP_per_capita"], mode="lines+markers", name="GDP per Capita"
+    ), row=1, col=2)
+
+    # Life Expectancy
+    fig.add_trace(go.Scatter(
+        x=country_df["Year"], y=country_df["Life_Expectancy"], mode="lines+markers", name="Life Expectancy"
+    ), row=2, col=1)
+
+    # Population Density
+    fig.add_trace(go.Scatter(
+        x=country_df["Year"], y=country_df["Population_Density"], mode="lines+markers", name="Population Density"
+    ), row=2, col=2)
+
+    fig.update_layout(
+        height=500,
+        width=800,
+        template="plotly_dark",
+        margin=dict(t=50, b=20)
     )
-    mini_map.update_geos(fitbounds="locations", visible=False)
-    mini_map.update_layout(height=150, margin=dict(l=0, r=0, t=0, b=0))
 
-    # Line chart for HDI, GDP, Life Expectancy
-    line_fig = px.line(
-        row,
-        x="Year",
-        y=["HDI", "GDP_per_capita", "Life_Expectancy"],
-        labels={"value": "Value", "variable": "Indicator"},
-        title=f"Trends - {r['Country']}"
-    )
-    line_fig.update_layout(
-        plot_bgcolor="black",
-        paper_bgcolor="black",
-        font_color="white",
-        height=250
-    )
-    line_fig.update_xaxes(tickvals=row['Year'], tickangle=45)
-
-    content = html.Div([
-        html.P(f"HDI: {r['HDI']}"),
-        html.P(f"GDP per Capita: {r['GDP_per_capita']}"),
-        html.P(f"Life Expectancy: {r['Life_Expectancy']}"),
-        dcc.Graph(figure=line_fig),
-        dcc.Graph(figure=mini_map)
-    ])
-
-    return {"display": "block"}, f"{r['Country']} ({year})", content
+    return {"display": "block"}, f"{country_df.iloc[0]['Country']} ({year})", dcc.Graph(figure=fig)
 
 # -----------------------------
 # Run
