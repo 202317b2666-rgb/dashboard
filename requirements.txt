@@ -4,3 +4,7 @@ plotly==6.5.0
 numpy==2.3.5
 streamlit-plotly-events
 pydeck
+dash
+plotly
+pandas
+gunicorn
