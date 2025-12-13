@@ -1,150 +1,119 @@
 import streamlit as st
 import pandas as pd
-import json
 import plotly.express as px
-from streamlit_plotly_events import plotly_events
+import json
 
-# ----------------------------
-# PAGE CONFIG
-# ----------------------------
+# -----------------------------
+# Page config
+# -----------------------------
 st.set_page_config(
     page_title="🌍 Global Health Dashboard",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
-st.title("🌍 Global Health Dashboard")
+# -----------------------------
+# Load data
+# -----------------------------
+df = pd.read_csv("final_with_socio_cleaned.csv")
 
-# ----------------------------
-# LOAD DATA
-# ----------------------------
-@st.cache_data
-def load_data():
-    df = pd.read_csv("final_with_socio_cleaned.csv")
-    hex_df = pd.read_csv("Hex.csv")
-    with open("countries.geo.json") as f:
-        geo = json.load(f)
-    return df, hex_df, geo
+with open("countries.geo.json") as f:
+    geojson = json.load(f)
 
-df, hex_df, geojson = load_data()
+# Ensure correct dtypes
+df["Year"] = df["Year"].astype(int)
 
-# ----------------------------
-# CLEAN + MERGE
-# ----------------------------
-df["ISO3"] = df["ISO3"].astype(str)
-hex_df["iso_alpha"] = hex_df["iso_alpha"].astype(str)
+# -----------------------------
+# Session state
+# -----------------------------
+if "selected_country" not in st.session_state:
+    st.session_state.selected_country = None
 
-merged = df.merge(
-    hex_df,
-    left_on="ISO3",
-    right_on="iso_alpha",
-    how="left"
+# -----------------------------
+# Sidebar - Year slider
+# -----------------------------
+year = st.sidebar.slider(
+    "Select Year",
+    int(df["Year"].min()),
+    int(df["Year"].max()),
+    int(df["Year"].max())
 )
 
-merged["hex"] = merged["hex"].fillna("#444444")
+year_df = df[df["Year"] == year]
 
-# ----------------------------
-# YEAR SLIDER
-# ----------------------------
-min_year = int(merged["Year"].min())
-max_year = int(merged["Year"].max())
-
-year = st.slider(
-    "📅 Select Year",
-    min_year,
-    max_year,
-    max_year
-)
-
-year_df = merged[merged["Year"] == year]
-
-# ----------------------------
-# WORLD MAP
-# ----------------------------
+# -----------------------------
+# World Map
+# -----------------------------
 fig = px.choropleth(
     year_df,
     geojson=geojson,
     locations="ISO3",
     featureidkey="properties.ISO_A3",
-    color="hex",
-    color_discrete_map="identity",
+    color="HDI",
     hover_name="Country",
+    color_continuous_scale="Viridis",
 )
 
 fig.update_geos(
+    showcountries=True,
     showcoastlines=False,
-    showcountries=False,
-    bgcolor="black"
+    projection_type="natural earth"
 )
 
 fig.update_layout(
     margin=dict(l=0, r=0, t=0, b=0),
-    paper_bgcolor="black",
-    plot_bgcolor="black",
+    height=600
 )
 
-# ----------------------------
-# CLICK EVENTS
-# ----------------------------
-selected = plotly_events(
+# -----------------------------
+# Capture click
+# -----------------------------
+click = st.plotly_chart(
     fig,
-    click_event=True,
-    hover_event=False,
-    select_event=False,
-    override_height=600,
-    override_width="100%"
+    use_container_width=True,
+    key="map"
 )
 
-# ----------------------------
-# STORE CLICKED COUNTRY
-# ----------------------------
+# Streamlit workaround: use selectbox fallback
+country_list = sorted(year_df["Country"].unique())
+selected = st.selectbox(
+    "Click not detected? Select country manually:",
+    [""] + country_list
+)
+
 if selected:
-    iso = selected[0]["location"]
+    st.session_state.selected_country = selected
 
-    row = year_df[year_df["ISO3"] == iso]
-    if not row.empty:
-        r = row.iloc[0]
-        st.session_state["popup"] = {
-            "Country": r["Country"],
-            "HDI": r["HDI"],
-            "GDP": r["GDP_per_capita"],
-            "Gini": r["Gini_Index"],
-            "Life": r["Life_Expectancy"],
-            "Median": r["Median_Age_Est"],
-            "COVID_D": r["COVID_Deaths"],
-            "COVID_C": r["COVID_Cases"]
-        }
-
-# ----------------------------
-# FLOATING POPUP
-# ----------------------------
-if "popup" in st.session_state:
-    p = st.session_state["popup"]
+# -----------------------------
+# Floating popup (CSS)
+# -----------------------------
+if st.session_state.selected_country:
+    row = year_df[year_df["Country"] == st.session_state.selected_country].iloc[0]
 
     st.markdown(
         f"""
-        <div style="
-            position:fixed;
-            top:90px;
-            right:40px;
-            width:320px;
-            background:#0b1c2d;
-            padding:20px;
-            border-radius:14px;
-            color:white;
-            z-index:9999;
-            box-shadow:0 0 25px rgba(0,0,0,0.7);
-            font-size:14px;
-        ">
-        <h4 style="margin-top:0;">📊 {p['Country']}</h4>
-        <hr style="border:1px solid #333;">
-        <b>HDI:</b> {p['HDI']}<br>
-        <b>GDP / Capita:</b> {p['GDP']}<br>
-        <b>Gini Index:</b> {p['Gini']}<br>
-        <b>Life Expectancy:</b> {p['Life']}<br>
-        <b>Median Age:</b> {p['Median']}<br>
-        <b>COVID Deaths / mil:</b> {p['COVID_D']}<br>
-        <b>COVID Cases / mil:</b> {p['COVID_C']}
+        <style>
+        .popup {{
+            position: fixed;
+            right: 30px;
+            top: 120px;
+            background: white;
+            padding: 20px;
+            width: 320px;
+            border-radius: 12px;
+            box-shadow: 0px 8px 30px rgba(0,0,0,0.25);
+            z-index: 9999;
+        }}
+        </style>
+
+        <div class="popup">
+            <h3>📊 {row['Country']}</h3>
+            <b>Year:</b> {year}<br>
+            <b>HDI:</b> {row['HDI']}<br>
+            <b>GDP per Capita:</b> {row['GDP_per_capita']}<br>
+            <b>Gini Index:</b> {row['Gini_Index']}<br>
+            <b>Life Expectancy:</b> {row['Life_Expectancy']}<br>
+            <b>Median Age:</b> {row['Median_Age_Est']}<br>
+            <b>COVID Deaths / mil:</b> {row['COVID_Deaths']}<br>
         </div>
         """,
         unsafe_allow_html=True
