@@ -1,15 +1,14 @@
 import pandas as pd
 import plotly.express as px
-from dash import Dash, dcc, html, Input, Output, State
+from dash import Dash, dcc, html, Input, Output, State, callback_context as ctx
 import dash_bootstrap_components as dbc
 
 # -----------------------------
 # Load data
 # -----------------------------
 df = pd.read_csv("final_with_socio_cleaned.csv")
-
 df["Year"] = df["Year"].astype(int)
-years = sorted(df["Year"].unique().tolist())  # ✅ convert to Python list
+years = sorted(df["Year"].unique().tolist())
 
 # -----------------------------
 # Dash App
@@ -19,7 +18,6 @@ app = Dash(
     external_stylesheets=[dbc.themes.DARKLY],
     suppress_callback_exceptions=True
 )
-
 server = app.server  # REQUIRED for Render
 
 # -----------------------------
@@ -43,7 +41,7 @@ app.layout = dbc.Container(
                 max=int(max(years)),
                 value=int(max(years)),
                 step=1,
-                marks={int(y): str(y) for y in years if y % 5 == 0}  # ✅ FIX
+                marks={int(y): str(y) for y in years if y % 5 == 0}
             )
         ], style={"margin": "20px"}),
 
@@ -124,7 +122,7 @@ def update_map(year):
     return fig
 
 # -----------------------------
-# Popup Callback
+# Popup Callback (FIXED)
 # -----------------------------
 @app.callback(
     Output("popup-overlay", "style"),
@@ -135,11 +133,14 @@ def update_map(year):
     State("year-slider", "value")
 )
 def show_popup(clickData, close_clicks, year):
+    triggered_id = ctx.triggered_id
 
-    if close_clicks:
+    # If Close button was clicked
+    if triggered_id == "close-popup":
         return {"display": "none"}, "", ""
 
-    if not clickData:
+    # If no country clicked
+    if triggered_id != "world-map" or not clickData:
         return {"display": "none"}, "", ""
 
     iso = clickData["points"][0]["location"]
@@ -162,9 +163,8 @@ def show_popup(clickData, close_clicks, year):
 
     return {"display": "block"}, f"{r['Country']} ({year})", content
 
-
 # -----------------------------
-# Run App
+# Run
 # -----------------------------
 if __name__ == "__main__":
-    app.run_server(host="0.0.0.0", port=8050)
+    app.run_server(debug=True)
