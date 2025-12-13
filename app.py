@@ -4,12 +4,13 @@ import plotly.express as px
 import pandas as pd
 
 # ----------------------------
-# Sample country data
+# Sample country map data with HEX colors
 # ----------------------------
 map_df = pd.DataFrame({
     "lat": [21, 37, 35],
     "lon": [78, -95, 103],
-    "country": ["India", "USA", "China"]
+    "country": ["India", "USA", "China"],
+    "hex": ["#FF5733", "#33FF57", "#3357FF"]
 })
 
 # Sample indicator data (GDP, HDI)
@@ -32,7 +33,7 @@ indicator_data = {
 }
 
 # ----------------------------
-# Plotly map figure
+# Plotly map figure with sea blue background
 # ----------------------------
 fig = px.scatter_geo(
     map_df,
@@ -42,7 +43,13 @@ fig = px.scatter_geo(
     projection="natural earth",
     title="Interactive World Map"
 )
-fig.update_traces(marker=dict(size=12, color="blue"))
+# Set ocean color and country HEX colors
+fig.update_geos(
+    showcoastlines=True, coastlinecolor="white",
+    showland=True, landcolor=map_df["hex"],
+    showocean=True, oceancolor="#4DA6FF"  # sea blue
+)
+fig.update_traces(marker=dict(size=12, color=map_df["hex"]))
 
 # ----------------------------
 # Initialize Dash app
@@ -55,26 +62,28 @@ app.title = "Interactive World Map Dashboard"
 # ----------------------------
 app.layout = html.Div([
     dcc.Graph(id="world-map", figure=fig, style={"height": "70vh"}),
-    
-    # Hidden div for popup
+
+    # Hidden popup
     html.Div(id="popup-div", style={
         "display": "none",
         "position": "fixed",
         "top": "50%",
         "left": "50%",
         "transform": "translate(-50%, -50%)",
-        "width": "600px",
+        "width": "650px",
         "height": "500px",
-        "background-color": "white",
-        "border": "2px solid black",
-        "box-shadow": "0 4px 20px rgba(0,0,0,0.3)",
+        "background-color": "#121212",  # dark mode background
+        "color": "white",               # text in popup white
+        "border": "2px solid white",
+        "box-shadow": "0 4px 20px rgba(0,0,0,0.7)",
         "z-index": "999",
         "padding": "20px",
         "overflow-y": "scroll"
     }, children=[
-        html.H2(id="popup-title", children=""),
+        html.H2(id="popup-title", children="", style={"color": "white"}),
         html.Div(id="popup-charts"),
-        html.Button("Close", id="close-popup", n_clicks=0, style={"margin-top": "20px", "padding": "5px 10px"})
+        html.Button("Close", id="close-popup", n_clicks=0,
+                    style={"margin-top": "20px", "padding": "5px 10px"})
     ])
 ])
 
@@ -110,14 +119,18 @@ def display_popup(clickData, n_clicks, current_style):
         # Get indicator data
         df = indicator_data.get(country)
         if df is None:
-            return current_style, f"{country} Details", html.P("No data available")
+            return current_style, f"{country} Details", html.P("No data available", style={"color": "white"})
         
-        # Create charts
+        # Create charts with white background
         gdp_chart = dcc.Graph(
-            figure=px.line(df, x="Year", y="GDP", title=f"{country} GDP Trend")
+            figure=px.line(df, x="Year", y="GDP", title=f"{country} GDP Trend").update_layout(
+                plot_bgcolor="#ffffff", paper_bgcolor="#121212", font_color="white"
+            )
         )
         hdi_chart = dcc.Graph(
-            figure=px.line(df, x="Year", y="HDI", title=f"{country} HDI Trend")
+            figure=px.line(df, x="Year", y="HDI", title=f"{country} HDI Trend").update_layout(
+                plot_bgcolor="#ffffff", paper_bgcolor="#121212", font_color="white"
+            )
         )
 
         charts = html.Div([gdp_chart, hdi_chart])
