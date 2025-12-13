@@ -1,120 +1,125 @@
-import streamlit as st
-import pandas as pd
-import plotly.express as px
 import json
-
-# -----------------------------
-# Page config
-# -----------------------------
-st.set_page_config(
-    page_title="🌍 Global Health Dashboard",
-    layout="wide"
-)
+import pandas as pd
+from dash import Dash, dcc, html, Input, Output
+import plotly.express as px
 
 # -----------------------------
 # Load data
 # -----------------------------
-df = pd.read_csv("final_with_socio_cleaned.csv")
+data = pd.read_csv("final_with_socio_cleaned.csv")
+hex_df = pd.read_csv("Hex.csv")
 
-with open("countries.geo.json") as f:
+with open("countries.geo.json", "r", encoding="utf-8") as f:
     geojson = json.load(f)
 
-# Ensure correct dtypes
-df["Year"] = df["Year"].astype(int)
+data.columns = data.columns.str.strip()
+
+ISO_COL = "ISO3" if "ISO3" in data.columns else "ISO3_code"
 
 # -----------------------------
-# Session state
+# App
 # -----------------------------
-if "selected_country" not in st.session_state:
-    st.session_state.selected_country = None
-
-# -----------------------------
-# Sidebar - Year slider
-# -----------------------------
-year = st.sidebar.slider(
-    "Select Year",
-    int(df["Year"].min()),
-    int(df["Year"].max()),
-    int(df["Year"].max())
-)
-
-year_df = df[df["Year"] == year]
+app = Dash(__name__)
+server = app.server
 
 # -----------------------------
-# World Map
+# Layout
 # -----------------------------
-fig = px.choropleth(
-    year_df,
-    geojson=geojson,
-    locations="ISO3",
-    featureidkey="properties.ISO_A3",
-    color="HDI",
-    hover_name="Country",
-    color_continuous_scale="Viridis",
-)
+app.layout = html.Div([
 
-fig.update_geos(
-    showcountries=True,
-    showcoastlines=False,
-    projection_type="natural earth"
-)
+    html.H1("🌍 Global Health Dashboard", style={"textAlign": "center"}),
 
-fig.update_layout(
-    margin=dict(l=0, r=0, t=0, b=0),
-    height=600
-)
+    html.Div([
+        html.Label("Select Year"),
+        dcc.Slider(
+            min=int(data["Year"].min()),
+            max=int(data["Year"].max()),
+            step=1,
+            value=2020,
+            marks={y: str(y) for y in range(1980, 2025, 5)},
+            id="year-slider"
+        ),
+    ], style={"padding": "20px"}),
 
-# -----------------------------
-# Capture click
-# -----------------------------
-click = st.plotly_chart(
-    fig,
-    use_container_width=True,
-    key="map"
-)
+    dcc.Graph(id="world-map"),
 
-# Streamlit workaround: use selectbox fallback
-country_list = sorted(year_df["Country"].unique())
-selected = st.selectbox(
-    "Click not detected? Select country manually:",
-    [""] + country_list
-)
-
-if selected:
-    st.session_state.selected_country = selected
-
-# -----------------------------
-# Floating popup (CSS)
-# -----------------------------
-if st.session_state.selected_country:
-    row = year_df[year_df["Country"] == st.session_state.selected_country].iloc[0]
-
-    st.markdown(
-        f"""
-        <style>
-        .popup {{
-            position: fixed;
-            right: 30px;
-            top: 120px;
-            background: white;
-            padding: 20px;
-            width: 320px;
-            border-radius: 12px;
-            box-shadow: 0px 8px 30px rgba(0,0,0,0.25);
-            z-index: 9999;
-        }}
-        </style>
-
-        <div class="popup">
-            <h3>📊 {row['Country']}</h3>
-            <b>Year:</b> {year}<br>
-            <b>HDI:</b> {row['HDI']}<br>
-            <b>GDP per Capita:</b> {row['GDP_per_capita']}<br>
-            <b>Gini Index:</b> {row['Gini_Index']}<br>
-            <b>Life Expectancy:</b> {row['Life_Expectancy']}<br>
-            <b>Median Age:</b> {row['Median_Age_Est']}<br>
-            <b>COVID Deaths / mil:</b> {row['COVID_Deaths']}<br>
-        </div>
-        """,
-        unsafe_allow_html=True
+    html.Div(
+        id="popup",
+        style={
+            "position": "fixed",
+            "top": "120px",
+            "right": "20px",
+            "width": "320px",
+            "backgroundColor": "white",
+            "padding": "15px",
+            "borderRadius": "10px",
+            "boxShadow": "0px 0px 15px rgba(0,0,0,0.3)",
+            "display": "none",
+            "zIndex": "1000"
+        }
     )
+])
+
+# -----------------------------
+# Map update
+# -----------------------------
+@app.callback(
+    Output("world-map", "figure"),
+    Input("year-slider", "value")
+)
+def update_map(year):
+    df = data[data["Year"] == year]
+
+    fig = px.choropleth(
+        df,
+        geojson=geojson,
+        locations=ISO_COL,
+        color="HDI",
+        hover_name="Location",
+        projection="natural earth",
+        color_continuous_scale="Viridis"
+    )
+
+    fig.update_geos(fitbounds="locations", visible=False)
+    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+
+    return fig
+
+# -----------------------------
+# Popup update (CLICK)
+# -----------------------------
+@app.callback(
+    Output("popup", "children"),
+    Output("popup", "display"),
+    Input("world-map", "clickData"),
+    Input("year-slider", "value")
+)
+def show_popup(clickData, year):
+    if not clickData:
+        return "", "none"
+
+    iso = clickData["points"][0]["location"]
+    row = data[(data[ISO_COL] == iso) & (data["Year"] == year)]
+
+    if row.empty:
+        return "", "none"
+
+    r = row.iloc[0]
+
+    content = [
+        html.H3(r["Location"]),
+        html.P(f"Year: {year}"),
+        html.P(f"HDI: {round(r.get('HDI', 0), 3)}"),
+        html.P(f"GDP per Capita: {round(r.get('GDP_per_capita', 0), 2)}"),
+        html.P(f"Gini Index: {round(r.get('GiniIndex', 0), 2)}"),
+        html.P(f"Life Expectancy: {round(r.get('LEx', 0), 2)}"),
+        html.P(f"Median Age: {round(r.get('MedianAgePop', 0), 2)}"),
+    ]
+
+    return content, "block"
+
+# -----------------------------
+# Run
+# -----------------------------
+if __name__ == "__main__":
+    app.run_server(debug=True)
