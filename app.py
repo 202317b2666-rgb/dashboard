@@ -7,7 +7,7 @@ import pandas as pd
 # -----------------------------
 # LOAD DATA
 # -----------------------------
-df = pd.read_csv("final_socio_cleaned.csv")
+df = pd.read_csv("final_with_socio_cleaned.csv")
 
 # Ensure ISO3 column exists
 df["ISO3"] = df["ISO3"].astype(str)
