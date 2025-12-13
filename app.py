@@ -1,125 +1,172 @@
-import json
 import pandas as pd
-from dash import Dash, dcc, html, Input, Output
 import plotly.express as px
+from dash import Dash, dcc, html, Input, Output, State
+import dash_bootstrap_components as dbc
 
-# -----------------------------
-# Load data
-# -----------------------------
-data = pd.read_csv("final_with_socio_cleaned.csv")
-hex_df = pd.read_csv("Hex.csv")
+# =============================
+# Load Data
+# =============================
+df = pd.read_csv("final_with_socio_cleaned.csv")
 
-with open("countries.geo.json", "r", encoding="utf-8") as f:
-    geojson = json.load(f)
+df["Year"] = df["Year"].astype(int)
+years = sorted(df["Year"].unique().tolist())
 
-data.columns = data.columns.str.strip()
+# =============================
+# Dash App
+# =============================
+app = Dash(
+    __name__,
+    external_stylesheets=[dbc.themes.DARKLY],
+    suppress_callback_exceptions=True
+)
 
-ISO_COL = "ISO3" if "ISO3" in data.columns else "ISO3_code"
+server = app.server  # REQUIRED FOR RENDER
 
-# -----------------------------
-# App
-# -----------------------------
-app = Dash(__name__)
-server = app.server
-
-# -----------------------------
+# =============================
 # Layout
-# -----------------------------
-app.layout = html.Div([
+# =============================
+app.layout = dbc.Container(
+    fluid=True,
+    children=[
 
-    html.H1("🌍 Global Health Dashboard", style={"textAlign": "center"}),
-
-    html.Div([
-        html.Label("Select Year"),
-        dcc.Slider(
-            min=int(data["Year"].min()),
-            max=int(data["Year"].max()),
-            step=1,
-            value=2020,
-            marks={y: str(y) for y in range(1980, 2025, 5)},
-            id="year-slider"
+        html.H2(
+            "🌍 Global Health Dashboard",
+            style={"textAlign": "center", "margin": "20px"}
         ),
-    ], style={"padding": "20px"}),
 
-    dcc.Graph(id="world-map"),
+        # -------- Year Slider --------
+        html.Div(
+            [
+                html.Label("Select Year"),
+                dcc.Slider(
+                    id="year-slider",
+                    min=int(min(years)),
+                    max=int(max(years)),
+                    value=int(max(years)),
+                    step=1,
+                    marks={int(y): str(y) for y in years if y % 5 == 0}
+                )
+            ],
+            style={"margin": "20px"}
+        ),
 
-    html.Div(
-        id="popup",
-        style={
-            "position": "fixed",
-            "top": "120px",
-            "right": "20px",
-            "width": "320px",
-            "backgroundColor": "white",
-            "padding": "15px",
-            "borderRadius": "10px",
-            "boxShadow": "0px 0px 15px rgba(0,0,0,0.3)",
-            "display": "none",
-            "zIndex": "1000"
-        }
-    )
-])
+        # -------- World Map --------
+        dcc.Graph(
+            id="world-map",
+            style={"height": "75vh"}
+        ),
 
-# -----------------------------
-# Map update
-# -----------------------------
+        # -------- Floating Popup --------
+        html.Div(
+            id="popup-overlay",
+            style={
+                "display": "none",
+                "position": "fixed",
+                "top": "0",
+                "left": "0",
+                "width": "100%",
+                "height": "100%",
+                "backgroundColor": "rgba(0,0,0,0.75)",
+                "zIndex": "999"
+            },
+            children=[
+                html.Div(
+                    style={
+                        "position": "absolute",
+                        "top": "50%",
+                        "left": "50%",
+                        "transform": "translate(-50%, -50%)",
+                        "width": "60%",
+                        "backgroundColor": "#111",
+                        "padding": "25px",
+                        "borderRadius": "10px",
+                        "color": "white"
+                    },
+                    children=[
+                        html.H4(id="popup-title"),
+                        html.Hr(),
+                        html.Div(id="popup-content"),
+                        html.Br(),
+                        dbc.Button("Close", id="close-popup", color="danger")
+                    ]
+                )
+            ]
+        )
+    ]
+)
+
+# =============================
+# Map Callback
+# =============================
 @app.callback(
     Output("world-map", "figure"),
     Input("year-slider", "value")
 )
 def update_map(year):
-    df = data[data["Year"] == year]
+    dff = df[df["Year"] == year]
 
     fig = px.choropleth(
-        df,
-        geojson=geojson,
-        locations=ISO_COL,
+        dff,
+        locations="ISO3",
         color="HDI",
-        hover_name="Location",
-        projection="natural earth",
-        color_continuous_scale="Viridis"
+        hover_name="Country",
+        color_continuous_scale="Viridis",
+        title=f"Global HDI Map - {year}"
     )
 
-    fig.update_geos(fitbounds="locations", visible=False)
-    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+    fig.update_layout(
+        geo=dict(
+            showframe=False,
+            showcoastlines=False,
+            bgcolor="black"
+        ),
+        paper_bgcolor="black",
+        plot_bgcolor="black"
+    )
 
     return fig
 
-# -----------------------------
-# Popup update (CLICK)
-# -----------------------------
+# =============================
+# Popup Callback
+# =============================
 @app.callback(
-    Output("popup", "children"),
-    Output("popup", "display"),
+    Output("popup-overlay", "style"),
+    Output("popup-title", "children"),
+    Output("popup-content", "children"),
     Input("world-map", "clickData"),
-    Input("year-slider", "value")
+    Input("close-popup", "n_clicks"),
+    State("year-slider", "value")
 )
-def show_popup(clickData, year):
+def show_popup(clickData, close_clicks, year):
+
+    if close_clicks:
+        return {"display": "none"}, "", ""
+
     if not clickData:
-        return "", "none"
+        return {"display": "none"}, "", ""
 
     iso = clickData["points"][0]["location"]
-    row = data[(data[ISO_COL] == iso) & (data["Year"] == year)]
+    row = df[(df["ISO3"] == iso) & (df["Year"] == year)]
 
     if row.empty:
-        return "", "none"
+        return {"display": "none"}, "", ""
 
     r = row.iloc[0]
 
-    content = [
-        html.H3(r["Location"]),
-        html.P(f"Year: {year}"),
-        html.P(f"HDI: {round(r.get('HDI', 0), 3)}"),
-        html.P(f"GDP per Capita: {round(r.get('GDP_per_capita', 0), 2)}"),
-        html.P(f"Gini Index: {round(r.get('GiniIndex', 0), 2)}"),
-        html.P(f"Life Expectancy: {round(r.get('LEx', 0), 2)}"),
-        html.P(f"Median Age: {round(r.get('MedianAgePop', 0), 2)}"),
-    ]
+    content = html.Div([
+        html.P(f"HDI: {r['HDI']}"),
+        html.P(f"GDP per Capita: {r['GDP_per_capita']}"),
+        html.P(f"Gini Index: {r['Gini_Index']}"),
+        html.P(f"Life Expectancy: {r['Life_Expectancy']}"),
+        html.P(f"Median Age: {r['Median_Age_Est']}"),
+        html.P(f"COVID Deaths / mil: {r['COVID_Deaths']}"),
+        html.P(f"Population Density: {r['Population_Density']}")
+    ])
 
-    return content, "block"
+    return {"display": "block"}, f"{r['Country']} ({year})", content
 
-# -----------------------------
-# Run
-# -----------------------------
+# =============================
+# Run App
+# =============================
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run_server(host="0.0.0.0", port=8050)
