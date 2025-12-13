@@ -9,11 +9,10 @@ import pandas as pd
 # -----------------------------
 df = pd.read_csv("final_with_socio_cleaned.csv")
 
-# Ensure ISO3 column exists
 df["ISO3"] = df["ISO3"].astype(str)
 
 # -----------------------------
-# APP SETUP
+# DASH APP
 # -----------------------------
 app = dash.Dash(
     __name__,
@@ -29,17 +28,17 @@ fig = px.choropleth(
     df,
     locations="ISO3",
     color="HDI",
-    hover_name="Location",
+    hover_name="Country",   # ✅ FIXED
     color_continuous_scale="Viridis",
     title="Global HDI Map"
 )
 
 # -----------------------------
-# LAYOUT (ALL IDS MUST EXIST)
+# LAYOUT
 # -----------------------------
 app.layout = dbc.Container([
 
-    html.H2("🌍 Global Country Dashboard", className="text-center mt-3"),
+    html.H2("🌍 Global Health Dashboard", className="text-center mt-3"),
 
     dcc.Graph(
         id="world-map",
@@ -47,7 +46,6 @@ app.layout = dbc.Container([
         style={"height": "75vh"}
     ),
 
-    # 🔹 POPUP (MUST ALWAYS EXIST)
     html.Div(
         id="popup-div",
         style={
@@ -73,7 +71,7 @@ app.layout = dbc.Container([
 ], fluid=True)
 
 # -----------------------------
-# CALLBACK: SHOW POPUP
+# CALLBACK
 # -----------------------------
 @app.callback(
     Output("popup-div", "style"),
@@ -82,7 +80,7 @@ app.layout = dbc.Container([
     Input("world-map", "clickData"),
     Input("close-popup", "n_clicks")
 )
-def display_country_details(clickData, close_clicks):
+def show_country(clickData, close_clicks):
 
     if close_clicks:
         return {"display": "none"}, "", ""
@@ -91,24 +89,26 @@ def display_country_details(clickData, close_clicks):
         return {"display": "none"}, "", ""
 
     iso = clickData["points"][0]["location"]
-    country_df = df[df["ISO3"] == iso]
+    row = df[df["ISO3"] == iso]
 
-    if country_df.empty:
+    if row.empty:
         return {"display": "none"}, "", ""
 
-    country_name = country_df.iloc[0]["Location"]
+    r = row.iloc[0]
 
-    details = html.Ul([
-        html.Li(f"HDI: {country_df.iloc[0]['HDI']}"),
-        html.Li(f"Gini Index: {country_df.iloc[0]['GiniIndex']}"),
-        html.Li(f"Life Expectancy: {country_df.iloc[0]['LEx']}"),
-        html.Li(f"Median Age: {country_df.iloc[0]['MedianAgePop']}")
+    content = html.Ul([
+        html.Li(f"HDI: {r['HDI']}"),
+        html.Li(f"GDP per Capita: {r['GDP_per_capita']}"),
+        html.Li(f"Gini Index: {r['Gini_Index']}"),
+        html.Li(f"Life Expectancy: {r['Life_Expectancy']}"),
+        html.Li(f"Median Age (Est): {r['Median_Age_Est']}"),
+        html.Li(f"COVID Deaths / mil: {r['COVID_Deaths']}")
     ])
 
     return (
         {"display": "block"},
-        f"📊 {country_name}",
-        details
+        f"📊 {r['Country']}",
+        content
     )
 
 # -----------------------------
