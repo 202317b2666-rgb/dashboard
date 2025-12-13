@@ -1,14 +1,16 @@
 import pandas as pd
 import plotly.express as px
-from dash import Dash, dcc, html, Input, Output, State, callback_context as ctx
+from dash import Dash, dcc, html, Input, Output, State, ctx
 import dash_bootstrap_components as dbc
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
 
 # -----------------------------
 # Load data
 # -----------------------------
 df = pd.read_csv("final_with_socio_cleaned.csv")
 df["Year"] = df["Year"].astype(int)
-years = sorted(df["Year"].unique().tolist())
+years = sorted(df["Year"].unique().tolist())  # convert to python list
 
 # -----------------------------
 # Dash App
@@ -26,7 +28,6 @@ server = app.server  # REQUIRED for Render
 app.layout = dbc.Container(
     fluid=True,
     children=[
-
         html.H2(
             "🌍 Global Health Dashboard",
             style={"textAlign": "center", "margin": "20px"}
@@ -71,7 +72,7 @@ app.layout = dbc.Container(
                         "top": "50%",
                         "left": "50%",
                         "transform": "translate(-50%, -50%)",
-                        "width": "60%",
+                        "width": "80%",
                         "backgroundColor": "#111",
                         "padding": "25px",
                         "borderRadius": "10px",
@@ -122,7 +123,7 @@ def update_map(year):
     return fig
 
 # -----------------------------
-# Popup Callback (FIXED)
+# Popup Callback with Line Charts
 # -----------------------------
 @app.callback(
     Output("popup-overlay", "style"),
@@ -135,33 +136,49 @@ def update_map(year):
 def show_popup(clickData, close_clicks, year):
     triggered_id = ctx.triggered_id
 
-    # If Close button was clicked
     if triggered_id == "close-popup":
         return {"display": "none"}, "", ""
 
-    # If no country clicked
     if triggered_id != "world-map" or not clickData:
         return {"display": "none"}, "", ""
 
     iso = clickData["points"][0]["location"]
-    row = df[(df["ISO3"] == iso) & (df["Year"] == year)]
+    country_df = df[df["ISO3"] == iso]
 
-    if row.empty:
+    if country_df.empty:
         return {"display": "none"}, "", ""
 
-    r = row.iloc[0]
+    # Create line charts for selected attributes
+    fig = make_subplots(rows=2, cols=2, subplot_titles=("HDI", "GDP per Capita", "Life Expectancy", "Population Density"))
 
-    content = html.Div([
-        html.P(f"HDI: {r['HDI']}"),
-        html.P(f"GDP per Capita: {r['GDP_per_capita']}"),
-        html.P(f"Gini Index: {r['Gini_Index']}"),
-        html.P(f"Life Expectancy: {r['Life_Expectancy']}"),
-        html.P(f"Median Age: {r['Median_Age_Est']}"),
-        html.P(f"COVID Deaths / mil: {r['COVID_Deaths']}"),
-        html.P(f"Population Density: {r['Population_Density']}")
-    ])
+    # HDI
+    fig.add_trace(go.Scatter(
+        x=country_df["Year"], y=country_df["HDI"], mode="lines+markers", name="HDI"
+    ), row=1, col=1)
 
-    return {"display": "block"}, f"{r['Country']} ({year})", content
+    # GDP per Capita
+    fig.add_trace(go.Scatter(
+        x=country_df["Year"], y=country_df["GDP_per_capita"], mode="lines+markers", name="GDP per Capita"
+    ), row=1, col=2)
+
+    # Life Expectancy
+    fig.add_trace(go.Scatter(
+        x=country_df["Year"], y=country_df["Life_Expectancy"], mode="lines+markers", name="Life Expectancy"
+    ), row=2, col=1)
+
+    # Population Density
+    fig.add_trace(go.Scatter(
+        x=country_df["Year"], y=country_df["Population_Density"], mode="lines+markers", name="Population Density"
+    ), row=2, col=2)
+
+    fig.update_layout(
+        height=500,
+        width=800,
+        template="plotly_dark",
+        margin=dict(t=50, b=20)
+    )
+
+    return {"display": "block"}, f"{country_df.iloc[0]['Country']} ({year})", dcc.Graph(figure=fig)
 
 # -----------------------------
 # Run
