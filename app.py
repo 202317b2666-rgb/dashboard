@@ -8,8 +8,13 @@ import plotly.graph_objects as go
 # Load data
 # -----------------------------
 df = pd.read_csv("final_with_socio_cleaned.csv")
+hex_df = pd.read_csv("Hex.csv")
+
 df["Year"] = df["Year"].astype(int)
 years = sorted(df["Year"].unique().tolist())
+
+# Create ISO3 → HEX color mapping
+hex_color_map = dict(zip(hex_df["iso_alpha"], hex_df["hex"]))
 
 # -----------------------------
 # Dash App
@@ -32,16 +37,16 @@ app.layout = dbc.Container(
             style={"textAlign": "center", "margin": "20px"}
         ),
 
-        # ---- Year Slider ----
+        # ---- Year Slider (ALL YEARS) ----
         html.Div([
             html.Label("Select Year"),
             dcc.Slider(
                 id="year-slider",
-                min=int(min(years)),
-                max=int(max(years)),
-                value=int(max(years)),
+                min=min(years),
+                max=max(years),
+                value=max(years),
                 step=1,
-                marks={int(y): str(y) for y in years if y % 5 == 0}
+                marks={y: str(y) for y in years}
             )
         ], style={"margin": "20px"}),
 
@@ -95,7 +100,12 @@ app.layout = dbc.Container(
                             }
                         ),
                         html.Br(),
-                        dbc.Button("Close", id="close-popup", color="danger", style={"alignSelf": "center"})
+                        dbc.Button(
+                            "Close",
+                            id="close-popup",
+                            color="danger",
+                            style={"alignSelf": "center"}
+                        )
                     ]
                 )
             ]
@@ -116,17 +126,17 @@ def update_map(year):
     fig = px.choropleth(
         dff,
         locations="ISO3",
-        color="HDI",
+        color="ISO3",                      # color by country
         hover_name="Country",
-        color_continuous_scale="Viridis",
-        title=f"Global HDI Map - {year}"
+        color_discrete_map=hex_color_map, # HEX colors
+        title=f"Global Map - {year}"
     )
 
     fig.update_layout(
         geo=dict(
             showframe=False,
             showcoastlines=False,
-            bgcolor="black"
+            bgcolor="#1e90ff"  # 🌊 Sea blue
         ),
         paper_bgcolor="black",
         plot_bgcolor="black"
@@ -135,7 +145,7 @@ def update_map(year):
     return fig
 
 # -----------------------------
-# Popup Callback with Individual Charts
+# Popup Callback
 # -----------------------------
 @app.callback(
     Output("popup-overlay", "style"),
@@ -160,7 +170,6 @@ def show_popup(clickData, close_clicks, year):
     if country_df.empty:
         return {"display": "none"}, "", ""
 
-    # List of important indicators
     indicators = {
         "HDI": "HDI",
         "GDP per Capita": "GDP_per_capita",
@@ -171,26 +180,29 @@ def show_popup(clickData, close_clicks, year):
         "Population Density": "Population_Density"
     }
 
-    chart_list = []
+    charts = []
 
     for title, col in indicators.items():
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=country_df["Year"],
             y=country_df[col],
-            mode="lines+markers",
-            name=title
+            mode="lines+markers"
         ))
         fig.update_layout(
             title=title,
             template="plotly_dark",
             height=300,
             margin=dict(t=30, b=20),
-            xaxis=dict(title="Year", tickangle=-45, nticks=10)
+            xaxis=dict(title="Year", nticks=8)
         )
-        chart_list.append(dcc.Graph(figure=fig))
+        charts.append(dcc.Graph(figure=fig))
 
-    return {"display": "block"}, f"{country_df.iloc[0]['Country']} ({year})", chart_list
+    return (
+        {"display": "block"},
+        f"{country_df.iloc[0]['Country']} ({year})",
+        charts
+    )
 
 # -----------------------------
 # Run
